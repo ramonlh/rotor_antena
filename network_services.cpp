@@ -5,6 +5,24 @@
 #include "app_state.h"
 #include "config.h"
 
+
+bool isWifiConnected() {
+  return WiFi.status() == WL_CONNECTED;
+}
+
+String getWifiStatusText() {
+  if (WiFi.status() == WL_CONNECTED) {
+    return "STA conectada - IP: " + WiFi.localIP().toString();
+  }
+
+  wifi_mode_t mode = WiFi.getMode();
+  if (mode == WIFI_AP || mode == WIFI_AP_STA) {
+    return "AP activo - IP: " + WiFi.softAPIP().toString();
+  }
+
+  return "WiFi no conectada";
+}
+
 void initWifi() {
   WiFi.mode(WIFI_STA);
   if (!WiFi.config(LOCAL_IP, GATEWAY_IP, SUBNET_MASK, PRIMARY_DNS, SECONDARY_DNS)) {
