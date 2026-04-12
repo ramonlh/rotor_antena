@@ -3,6 +3,7 @@
 #include "imu_sensor.h"
 #include "app_state.h"
 #include "config.h"
+extern bool simulationMode;
 
 void initImu() {
   mySerial.begin(9600, SERIAL_8N1, kJY901RxPin, kJY901TxPin);
@@ -10,6 +11,9 @@ void initImu() {
 }
 
 void updateAntennaPosition() {
+  if (simulationMode) {
+    return;
+    }
   JY901.receiveSerialData();
   angleX = JY901.getRoll();
   angleY = JY901.getPitch();

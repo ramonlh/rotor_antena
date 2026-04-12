@@ -3,6 +3,7 @@
 #include <Arduino.h>
 #include "rotor_io.h"
 #include "config.h"
+#include "app_state.h"
 
 void initRotorPins() {
   pinMode(kElevpin, OUTPUT);
@@ -21,16 +22,28 @@ void initRotorPins() {
 }
 
 void enableElevation() {
+  if (simulationMode) {
+    Serial.println("SIM: enableElevation");
+    return;
+    }  
   digitalWrite(kElevpin, ON);
 }
 
 void disableElevation() {
+  if (simulationMode) {
+    Serial.println("SIM: enableElevation");
+    return;
+    }  
   digitalWrite(kElevpin, OFF);
   digitalWrite(kElev1pin, OFF);
   digitalWrite(kElev2pin, OFF);
 }
 
 void disableRotation() {
+  if (simulationMode) {
+    Serial.println("SIM: enableElevation");
+    return;
+    }    
   digitalWrite(kGiropin, OFF);
   digitalWrite(kGiro1pin, OFF);
   digitalWrite(kGiro2pin, OFF);

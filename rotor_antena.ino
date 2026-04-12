@@ -13,13 +13,14 @@
 #include "config.h"
 #include "app_state.h"
 #include "imu_sensor.h"
-//#include "rotor_control.h"
 #include "rotor_io.h"
 #include "rotor_axes.h"
 #include "rotor_positioning.h"
-#include "satellite_tracker.h"
+#include "sat_tracking.h"
 #include "web_ui.h"
 #include "network_services.h"
+#include "storage_services.h"
+#include "sat_favorites.h"
 
 void setup() {
   Serial.begin(115200);
@@ -31,11 +32,20 @@ void setup() {
   Serial.println("Servidor HTTP iniciado");
   initOta();
   getPositions();
+  initStorage();
+  initSatFavorites();
+  initFtpServer();
 }
 
 void loop() {
   ArduinoOTA.handle();
   server.handleClient();
+  handleFtpServer();
+
+  updateElevationMove();
+  updateAzimuthMove();
+  updateOrientationMove();
+  updateSimulationMotion();
 
   if ((millis() - timegetpositions) > timedelay120) {
     getPositions();
