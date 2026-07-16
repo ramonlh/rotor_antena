@@ -37,23 +37,29 @@ static String buildAzimuthGauge(float az, float satAz, bool showTarget) {
   s += "<text x='12' y='105' text-anchor='middle'>O</text>";
 
   // azul = satélite
-  if (showTarget) {
-    s += "<g transform='rotate(" + String(satAz, 1) + " 100 100)'>";
-    s += "<line x1='100' y1='100' x2='100' y2='22' "
-         "style='stroke:#1565c0;stroke-width:3;stroke-linecap:round;'/>";
-    s += "</g>";
-  }
+  // Se crea siempre para poder mostrarlo u ocultarlo desde /live.
+  s += "<g id='az_sat_needle' transform='rotate(";
+  s += String(satAz, 1);
+  s += " 100 100)' visibility='";
+  s += showTarget ? "visible" : "hidden";
+  s += "'>";
+
+  s += "<line x1='100' y1='100' x2='100' y2='22' "
+      "style='stroke:#1565c0;stroke-width:3;stroke-linecap:round;'/>";
+
+  s += "</g>";
 
   // roja = antena
-  s += "<g transform='rotate(" + String(az, 1) + " 100 100)'>";
+  s += "<g id='az_ant_needle' transform='rotate(" + String(az, 1) + " 100 100)'>";
   s += "<line x1='100' y1='100' x2='100' y2='42' class='needle'/>";
   s += "<polygon points='100,30 95,44 105,44' class='needle-fill'/>";
   s += "</g>";
 
   s += "<circle cx='100' cy='100' r='5' class='hub'/>";
   s += "</svg>";
-  s += "<div class='gauge-value'>ANT " + String(az, 1) + "&deg; | SAT " + String(satAz, 1) + "&deg;</div>";
-  s += "</div>";
+  s += "<div id='az_value' class='gauge-value'>ANT " +
+     String(az, 1) + "&deg; | SAT " +
+     String(satAz, 1) + "&deg;</div>";s += "</div>";
   return s;
 }
 
@@ -105,23 +111,30 @@ static String buildElevationGauge(float el, float satEl, bool showTarget) {
   s += "<text x='160' y='47' text-anchor='middle'>45</text>";
   s += "<text x='100' y='14' text-anchor='middle'>90</text>";
 
-  // azul = satélite, usando elevación real
-  if (showTarget) {
-    s += "<g transform='rotate(" + String(satRot, 1) + " 100 100)'>";
-    s += "<line x1='100' y1='100' x2='182' y2='100' "
-         "style='stroke:#1565c0;stroke-width:3;stroke-linecap:round;opacity:0.8;'/>";
-    s += "</g>";
-  }
+  // azul = satélite
+  s += "<g id='el_sat_needle' transform='rotate(";
+  s += String(satRot, 1);
+  s += " 100 100)' visibility='";
+  s += showTarget ? "visible" : "hidden";
+  s += "'>";
+
+  s += "<line x1='100' y1='100' x2='182' y2='100' "
+      "style='stroke:#1565c0;stroke-width:3;"
+      "stroke-linecap:round;opacity:0.8;'/>";
+
+  s += "</g>";
 
   // roja = antena, solo zona útil
-  s += "<g transform='rotate(" + String(rot, 1) + " 100 100)'>";
+  s += "<g id='el_ant_needle' transform='rotate(" + String(rot, 1) + " 100 100)'>";
   s += "<line x1='100' y1='100' x2='164' y2='100' class='needle'/>";
   s += "<polygon points='174,100 160,95 160,105' class='needle-fill'/>";
   s += "</g>";
 
   s += "<circle cx='100' cy='100' r='5' class='hub'/>";
   s += "</svg>";
-  s += "<div class='gauge-value'>ANT " + String(el, 1) + "&deg; | SAT " + String(satEl, 1) + "&deg;</div>";
+  s += "<div id='el_value' class='gauge-value'>ANT " +
+       String(el, 1) + "&deg; | SAT " +
+       String(satEl, 1) + "&deg;</div>";
   s += "</div>";
   return s;
 }
@@ -166,11 +179,13 @@ String buildHtml(bool refrescar) {
   ptr += "  " + String(stamp.hour) + ":" + String(stamp.minute) + ":" + String(stamp.second);
 
   ptr += " - WiFi: <strong>" + getWifiStatusText() + "</strong> | ";
-  ptr += "Modo: <strong>";
+  ptr += "Modo: <strong id='mode_text'>";
   ptr += simulationMode ? "SIMULACIÓN" : "REAL";
   ptr += "</strong><br>";
 
   ptr += "<div id='liveview_top'>";
+
+  ptr += "<span id='prediction_text'>";
 
   if (lastresponse == 200 && tabunixtime[0] != 0) {
     ptr += "Predicción OK";
@@ -183,7 +198,8 @@ String buildHtml(bool refrescar) {
   } else {
     ptr += "Fallo prediccion";
   }
-  ptr += "<br>";
+
+  ptr += "</span><br>";
   //ptr += "DEBUG pred: lastresponse=" + String(lastresponse) + " tab0=" + String(tabunixtime[0]) + "<br>";
 
   ptr += "<div class='gauges'>";
@@ -208,7 +224,7 @@ String buildHtml(bool refrescar) {
   ptr += "</div>";
 
   bool satVisible = isVisibleNow(satid);
-  ptr += "Visible ahora: <strong>";
+  ptr += "Visible ahora: <strong id='visible_text'>";
   ptr += isVisibleNow(satid) ? "SI" : "NO";
   ptr += "</strong><br>";
 
@@ -246,42 +262,27 @@ String buildHtml(bool refrescar) {
   ptr += "</div>";
 
   ptr += "<div id='liveview_bottom'>";
-  ptr += "Orientacion: <strong>";
+  ptr += "Orientacion: <strong id='orientation_text'>";
   if (!orientMoveActive) ptr += "IDLE";
   else if (orientPhase == ORIENT_WAIT_ELEV) ptr += "MOV_ELEV";
   else if (orientPhase == ORIENT_WAIT_AZ) ptr += "MOV_AZ";
   else ptr += "???";
   ptr += "</strong>";
 
-  ptr += " - Movimiento: <strong>";
+  ptr += " - Movimiento: <strong id='motion_text'>";
   ptr += getMotionStatusText();
   ptr += "</strong><br>";
   ptr += "</div>";
 
   ptr += "sat id: " + String(satid) + "  sat name: " + String(satname) + "<br>";
 
-ptr += "Fuente radio: <strong>";
-ptr += getRadioInfoSourceText();
-ptr += "</strong><br>";
-ptr += buildRadioInfoHtml(satid);
+  ptr += "Fuente radio: <strong>";
+  ptr += getRadioInfoSourceText();
+  ptr += "</strong><br>";
+  ptr += buildRadioInfoHtml(satid);
 
 ptr += "<script>";
-ptr += "async function refreshLiveView(){";
-ptr += "  try {";
-ptr += "    const r = await fetch('/', {cache:'no-store'});";
-ptr += "    const html = await r.text();";
-ptr += "    const doc = new DOMParser().parseFromString(html, 'text/html');";
-
-ptr += "    const srcTop = doc.getElementById('liveview_top');";
-ptr += "    const dstTop = document.getElementById('liveview_top');";
-ptr += "    if (srcTop && dstTop) dstTop.innerHTML = srcTop.innerHTML;";
-
-ptr += "    const srcBottom = doc.getElementById('liveview_bottom');";
-ptr += "    const dstBottom = document.getElementById('liveview_bottom');";
-ptr += "    if (srcBottom && dstBottom) dstBottom.innerHTML = srcBottom.innerHTML;";
-
-ptr += "  } catch(e) { console.log('refreshLiveView error', e); }";
-ptr += "}";
+ptr += "let refreshBusy=false;";
 
 ptr += "function sendCmd(url){";
 ptr += "  fetch(url, {method:'GET', cache:'no-store'})";
@@ -289,7 +290,7 @@ ptr += "    .then(() => setTimeout(refreshLiveView, 80))";
 ptr += "    .catch(err => console.log('sendCmd error', err));";
 ptr += "}";
 
-ptr += "setInterval(refreshLiveView, 700);";
+ptr += "setInterval(refreshLiveView, 1000);";
 ptr += "</script>";
 
   ptr += "</body>\n</html>\n";

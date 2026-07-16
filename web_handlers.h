@@ -3,6 +3,7 @@
 #pragma once
 
 void handleIndex();
+void handleLive();
 void handleSeguirSat();
 void handleIrAOrigen();
 void handleOrientarManual();
@@ -26,3 +27,4 @@ void handleAddFavoriteFromSearch();
 void handleSearchVisibleNow();
 void handleSelectVisibleSat();
 void handleAddVisibleSatToFavorites();
+

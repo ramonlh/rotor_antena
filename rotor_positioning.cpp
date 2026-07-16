@@ -20,8 +20,61 @@ static float clampElevation(float el) {
   return el;
 }
 
+static float angularDistanceDeg(float a, float b) {
+  a = normalizeAzimuth(a);
+  b = normalizeAzimuth(b);
+
+  float distance = fabsf(a - b);
+
+  if (distance > 180.0f) {
+    distance = 360.0f - distance;
+  }
+
+  return distance;
+}
+
+static float signedAngularDeltaDeg(
+    float fromAngle,
+    float toAngle) {
+
+  float delta =
+      normalizeAzimuth(toAngle) -
+      normalizeAzimuth(fromAngle);
+
+  if (delta > 180.0f) {
+    delta -= 360.0f;
+  }
+
+  if (delta < -180.0f) {
+    delta += 360.0f;
+  }
+
+  return delta;
+}
+
+static float azLastSafetyAngle = 0.0f;
+static unsigned long azLastProgressMs = 0;
+static unsigned long azSafetyStartMs = 0;
+static unsigned long azAllowedMoveMs = 0;
+
 bool isOrientationBusy() {
   return orientMoveActive;
+}
+
+void stopMotionBySafety(const char* reason) {
+  Serial.println();
+  Serial.println("=================================");
+  Serial.print("SEGURIDAD ROTOR: ");
+  Serial.println(reason);
+  Serial.println("Motores detenidos");
+  Serial.println("Seguimiento cancelado");
+  Serial.println("=================================");
+
+  stopAllMotion();
+
+  // Evitar que el seguimiento vuelva a arrancar
+  // automáticamente después del fallo.
+  enableseguirsat = false;
 }
 
 void updateSimulationMotion() {
@@ -154,17 +207,40 @@ void startAzimuthMove(float azim) {
     return;
   }
 
-  updateAntennaPosition();
-  azTarget = azim;
-  azMoveStartMs = millis();
-  azMovePhase2 = false;
+updateAntennaPosition();
 
-  if (abs(angleZ - azTarget) <= angfrenadoazim) {
-    disableRotation();
-    antazimut = angleZ;
-    azMoveActive = false;
-    return;
-  }
+azTarget = azim;
+azMovePhase2 = false;
+
+float distanceDeg =
+    angularDistanceDeg(angleZ, azTarget);
+
+if (distanceDeg <= angfrenadoazim) {
+  disableRotation();
+  antazimut = angleZ;
+  azMoveActive = false;
+  return;
+}
+
+  unsigned long now = millis();
+
+  azMoveStartMs = now;
+  azSafetyStartMs = now;
+  azLastProgressMs = now;
+  azLastSafetyAngle = angleZ;
+
+  azAllowedMoveMs = calculateMoveTimeoutMs(
+      distanceDeg,
+      kMinAzSpeedDegPerSec
+  );
+
+  Serial.printf(
+      "Azimut: %.1f -> %.1f, distancia %.1f, limite %lu ms\n",
+      angleZ,
+      azTarget,
+      distanceDeg,
+      azAllowedMoveMs
+  );
 
   disableRotation();
 
@@ -220,13 +296,6 @@ void updateAzimuthMove() {
 
   updateAntennaPosition();
 
-  if ((millis() - azMoveStartMs) > kMoveTimeoutMs) {
-    Serial.println("Azimuth timeout");
-    disableRotation();
-    azMoveActive = false;
-    return;
-  }
-
   if (azMoveDirectionRight) {
     if (!azMovePhase2) {
       if (angleZ >= (azTarget - angfrenadoazim)) {
@@ -277,6 +346,54 @@ void updateAzimuthMove() {
       }
     }
   }
+
+  // Si llegó al objetivo, no aplicar el watchdog.
+  if (!azMoveActive) {
+    return;
+  }
+
+  unsigned long now = millis();
+
+  // Cambio angular desde la última posición válida.
+  float delta = signedAngularDeltaDeg(
+      azLastSafetyAngle,
+      angleZ
+  );
+
+  bool correctProgress;
+
+  if (azMoveDirectionRight) {
+    correctProgress = delta >= kMinProgressDeg;
+  } else {
+    correctProgress = delta <= -kMinProgressDeg;
+  }
+
+  if (correctProgress) {
+    azLastSafetyAngle = angleZ;
+    azLastProgressMs = now;
+  }
+
+  // Sensor inmóvil, motor bloqueado o sentido incorrecto.
+  if ((now - azLastProgressMs) >
+      kNoProgressTimeoutMs) {
+
+    stopMotionBySafety(
+        "azimut sin progreso o sentido incorrecto"
+    );
+
+    return;
+  }
+
+  // Tiempo total excesivo para la distancia solicitada.
+  if ((now - azSafetyStartMs) >
+      azAllowedMoveMs) {
+
+    stopMotionBySafety(
+        "tiempo excesivo de azimut"
+    );
+
+    return;
+  }
 }
 
 void setAzimuth(float azim) {
@@ -293,35 +410,79 @@ void orientAntenna(float azim, float elev) {
 }
 
 void jogAzimuth(float delta) {
-  // mando manual => cancelar seguimiento automático
   enableseguirsat = false;
+
+  // Una orden manual de 5 grados debe terminar antes
+  // de admitir otra.
+  if (azMoveActive || orientMoveActive) {
+    Serial.println(
+        "JOG AZ ignorado: azimut todavía en movimiento"
+    );
+    return;
+  }
+
   motionStoppedByUser = false;
 
-  // tomar como base el objetivo ya pendiente si hay una orientación en curso;
-  // si no, la posición actual real
-  float baseAz = orientMoveActive ? orientTargetAz : angleZ;
-  float baseEl = orientMoveActive ? orientTargetEl : angleX;
+  updateAntennaPosition();
 
-  float newAz = normalizeAzimuth(baseAz + delta);
-  float newEl = clampElevation(baseEl);
+  float startAz = angleZ;
+  float newAz = normalizeAzimuth(startAz + delta);
 
-  orientAntenna(newAz, newEl);
+  // Izquierda/derecha solo mueven azimut.
+  disableElevation();
+  elevMoveActive = false;
+
+  orientMoveActive = false;
+  orientPhase = ORIENT_IDLE;
+
+  orientTargetAz = newAz;
+  orientTargetEl = angleX;
+
+  Serial.printf(
+      "JOG AZ: inicio=%.1f, paso=%.1f, objetivo=%.1f\n",
+      startAz,
+      delta,
+      newAz
+  );
+
+  startAzimuthMove(newAz);
 }
 
 void jogElevation(float delta) {
-  // mando manual => cancelar seguimiento automático
   enableseguirsat = false;
+
+  if (elevMoveActive || orientMoveActive) {
+    Serial.println(
+        "JOG EL ignorado: elevacion todavía en movimiento"
+    );
+    return;
+  }
+
   motionStoppedByUser = false;
 
-  // tomar como base el objetivo ya pendiente si hay una orientación en curso;
-  // si no, la posición actual real
-  float baseAz = orientMoveActive ? orientTargetAz : angleZ;
-  float baseEl = orientMoveActive ? orientTargetEl : angleX;
+  updateAntennaPosition();
 
-  float newAz = normalizeAzimuth(baseAz);
-  float newEl = clampElevation(baseEl + delta);
+  float startEl = angleX;
+  float newEl = clampElevation(startEl + delta);
 
-  orientAntenna(newAz, newEl);
+  // Arriba/abajo solo mueven elevación.
+  disableRotation();
+  azMoveActive = false;
+
+  orientMoveActive = false;
+  orientPhase = ORIENT_IDLE;
+
+  orientTargetAz = angleZ;
+  orientTargetEl = newEl;
+
+  Serial.printf(
+      "JOG EL: inicio=%.1f, paso=%.1f, objetivo=%.1f\n",
+      startEl,
+      delta,
+      newEl
+  );
+
+  startElevationMove(newEl);
 }
 
 bool isAnyMotionBusy() {

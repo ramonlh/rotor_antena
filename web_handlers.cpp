@@ -29,14 +29,97 @@ void handleIndex() {
 
   updateAntennaPosition();
 
-  // Cargar posiciones al entrar, al cambiar satélite,
-  // o si no hay datos / están viejos
-  if (satChanged || tabunixtime[0] == 0 || (millis() - timegetpositions > 10000)) {
+  // Consultar Internet solamente al cambiar de satélite
+  // o cuando todavía no existe ninguna predicción.
+  if (satChanged || tabunixtime[0] == 0) {
     getPositions();
     refreshRadioInfoForSat(satid);
   }
+    server.send(200, "text/html", buildHtml(false));
+  }
 
-  server.send(200, "text/html", buildHtml(false));
+void handleLive() {
+  // No llamar aquí a getPositions(), HTTPClient ni buildHtml().
+  // Esta ruta debe ser muy rápida.
+
+  const bool targetValid = (tabunixtime[0] != 0);
+  const bool visibleNow = isVisibleNow(satid);
+
+  const char* predictionText;
+
+  if (lastresponse == 200 && targetValid) {
+    predictionText = "Prediccion OK";
+  } else if (lastresponse == -2) {
+    predictionText = "Sin prediccion N2YO";
+  } else if (lastresponse == -3) {
+    predictionText = "JSON invalido N2YO";
+  } else if (lastresponse == -1) {
+    predictionText = "WiFi no conectada";
+  } else {
+    predictionText = "Fallo prediccion";
+  }
+
+  const char* orientationText = "IDLE";
+
+  if (orientMoveActive) {
+    if (orientPhase == ORIENT_WAIT_ELEV) {
+      orientationText = "MOV_ELEV";
+    } else if (orientPhase == ORIENT_WAIT_AZ) {
+      orientationText = "MOV_AZ";
+    } else {
+      orientationText = "ORIENT";
+    }
+  }
+
+  String json;
+  json.reserve(320);
+
+  json += "{";
+
+  json += "\"az\":";
+  json += String(angleZ, 1);
+
+  json += ",\"el\":";
+  json += String(angleX, 1);
+
+  json += ",\"satAz\":";
+  json += String(satazimut, 1);
+
+  json += ",\"satEl\":";
+  json += String(satelevat, 1);
+
+  json += ",\"targetValid\":";
+  json += targetValid ? "true" : "false";
+
+  json += ",\"simulation\":";
+  json += simulationMode ? "true" : "false";
+
+  json += ",\"tracking\":";
+  json += enableseguirsat ? "true" : "false";
+
+  json += ",\"visible\":";
+  json += visibleNow ? "true" : "false";
+
+  json += ",\"prediction\":\"";
+  json += predictionText;
+  json += "\"";
+
+  json += ",\"orientation\":\"";
+  json += orientationText;
+  json += "\"";
+
+  json += ",\"motion\":\"";
+  json += getMotionStatusText();
+  json += "\"";
+
+  json += "}";
+
+  server.sendHeader(
+      "Cache-Control",
+      "no-store, no-cache, must-revalidate"
+  );
+
+  server.send(200, "application/json", json);
 }
 
 void handleSeguirSat() {

@@ -46,6 +46,9 @@ bool searchVisibleNow() {
 
   HTTPClient http;
   http.begin(url);
+  http.setConnectTimeout(3000);
+  http.setTimeout(5000);
+
   int code = http.GET();
 
   Serial.print("HTTP code above: ");

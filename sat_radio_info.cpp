@@ -135,6 +135,8 @@ bool refreshRadioInfoForSat(long noradId) {
 
   http.begin(url);
   int code = http.GET();
+  http.setConnectTimeout(3000);
+  http.setTimeout(5000);
   gLastRadioHttpCode = code;
   Serial.print("HTTP code: ");
   Serial.println(code);

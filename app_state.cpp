@@ -2,7 +2,7 @@
 
 #include "app_state.h"
 
-bool simulationMode = true;
+bool simulationMode = false;
 bool elevMoveActive = false;
 bool elevMoveDirectionUp = true;
 float elevTarget = 0.0f;

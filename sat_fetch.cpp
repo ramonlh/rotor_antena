@@ -29,6 +29,8 @@ void getPositions() {
   Serial.println(serverPath);
 
   http.begin(serverPath.c_str());
+  http.setConnectTimeout(3000);
+  http.setTimeout(5000);
   const int httpResponseCode = http.GET();
   lastresponse = httpResponseCode;
 
@@ -44,18 +46,18 @@ void getPositions() {
 
   const String payload = http.getString();
   http.end();
-Serial.println("----- RAW PAYLOAD BEGIN -----");
-Serial.println(payload);
-Serial.println("----- RAW PAYLOAD END -----");
+  //Serial.println("----- RAW PAYLOAD BEGIN -----");
+  //Serial.println(payload);
+  //Serial.println("----- RAW PAYLOAD END -----");
   Serial.print("payload len: ");
   Serial.println(payload.length());
   Serial.println(payload.substring(0, 300));
-Serial.print("Primer caracter payload: ");
-if (payload.length() > 0) {
-  Serial.println(payload[0]);
-} else {
-  Serial.println("(vacio)");
-}
+  Serial.print("Primer caracter payload: ");
+  if (payload.length() > 0) {
+    Serial.println(payload[0]);
+  } else {
+    Serial.println("(vacio)");
+  }
   JSONVar myObject = JSON.parse(payload);
   if (JSON.typeof(myObject) != "object") {
     Serial.println("JSON invalido");

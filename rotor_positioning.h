@@ -15,6 +15,11 @@ void startOrientationMove(float azim, float elev);
 void updateOrientationMove();
 bool isOrientationBusy();
 
+void stopMotionBySafety(const char* reason);
+
+void stopAllMotion();
+bool isAnyMotionBusy();
+
 void stopAllMotion();
 bool isAnyMotionBusy();
 

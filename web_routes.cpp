@@ -7,6 +7,7 @@
 void initWebRoutes() {
   server.on("/", handleIndex);
   server.on("/index.html", handleIndex);
+  server.on("/live", handleLive);
   server.on("/seguirsat", handleSeguirSat);
   server.on("/iraorigen", handleIrAOrigen);
   server.on("/orientarmanual", handleOrientarManual);
