@@ -1,0 +1,41 @@
+OPTIMIZACION GLOBAL DE MEMORIA - ROTOR ANTENA
+
+Objetivo:
+Reducir uso de memoria de programa sin eliminar funciones.
+
+Cambios principales:
+1. web_pages.cpp
+   - Agrupadas cadenas HTML/CSS/JavaScript consecutivas.
+   - Se han reducido 309 operaciones String += a nivel de fuente.
+   - Se mantiene reserve() para evitar fragmentacion del heap.
+   - Se mantiene la actualizacion AZ/EL en grados enteros y /live.
+   - Eliminados estilos CSS sin uso visible en la pagina principal.
+
+2. web_handlers.cpp
+   - Eliminadas trazas de diagnostico rutinarias.
+   - Eliminada instrumentacion de tiempo de /live.
+   - Simplificadas algunas construcciones del JSON.
+   - No cambia el protocolo /live ni los handlers.
+
+3. rotor_positioning.cpp
+   - Conservada la logica actual de movimiento y watchdog tolerante.
+   - Eliminados logs rutinarios de JOG, simulacion y STOP.
+   - Conservado el motivo de cualquier parada de seguridad:
+       SEGURIDAD: <motivo>
+
+4. rotor_axes.cpp
+   - Eliminados logs rutinarios de movimiento.
+   - Conservadas todas las protecciones.
+
+5. sat_visible_now.cpp / sat_favorites.cpp / sat_tracking.cpp
+   - Eliminados o acortados mensajes de diagnostico no esenciales.
+   - Sin cambios en la logica funcional.
+
+6. rotor_positioning.h
+   - Eliminadas declaraciones duplicadas.
+
+IMPORTANTE:
+- Sustituir los ficheros, no copiarlos con nombres tipo "(2).cpp".
+- No se ha cambiado la particion del ESP32.
+- No se han eliminado funciones de seguimiento, favoritos, N2YO, web o seguridad.
+- El ahorro exacto de FLASH se conoce al recompilar en Arduino IDE.

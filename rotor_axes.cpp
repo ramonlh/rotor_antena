@@ -9,7 +9,7 @@
 #include "config.h"
 
 static float clampElevation(float elev) {
-  if (elev < 0.0f) elev = 0.0f;
+  if (elev < kMinElevationDeg) elev = kMinElevationDeg;
   if (elev > 90.0f) elev = 90.0f;
   return elev;
 }
@@ -18,6 +18,8 @@ static float elevLastSafetyAngle = 0.0f;
 static unsigned long elevLastProgressMs = 0;
 static unsigned long elevSafetyStartMs = 0;
 static unsigned long elevAllowedMoveMs = 0;
+
+static constexpr float kElTargetToleranceDeg = 0.20f;
 
 bool isElevationBusy() {
   return elevMoveActive;
@@ -28,7 +30,7 @@ void startElevationMove(float elev) {
   elev = clampElevation(elev);
 
   if (simulationMode) {
-    Serial.printf("SIM: startElevationMove -> %.1f\n", elev);
+    Serial.printf("SIM EL %.1f\n", elev);
 
     elevTarget = elev;
     simTargetEl = elev;
@@ -53,7 +55,7 @@ elevTarget = elev;
 
 float distanceDeg = fabsf(elevTarget - angleX);
 
-if (distanceDeg <= angfrenadoelev) {
+if (distanceDeg <= kElTargetToleranceDeg) {
   disableElevation();
   antelevat = angleX;
   elevMoveActive = false;
@@ -73,7 +75,7 @@ if (distanceDeg <= angfrenadoelev) {
   );
 
   Serial.printf(
-      "Elevacion: %.1f -> %.1f, distancia %.1f, limite %lu ms\n",
+      "EL %.1f>%.1f d%.1f t%lu\n",
       angleX,
       elevTarget,
       distanceDeg,
@@ -83,12 +85,10 @@ if (distanceDeg <= angfrenadoelev) {
   disableElevation();
 
   if (angleX < elevTarget) {
-    digitalWrite(kElev1pin, ON);
-    digitalWrite(kElev2pin, ON);
+    setElevationDirectionUp();
     elevMoveDirectionUp = true;
   } else {
-    digitalWrite(kElev1pin, OFF);
-    digitalWrite(kElev2pin, OFF);
+    setElevationDirectionDown();
     elevMoveDirectionUp = false;
   }
 
@@ -115,10 +115,10 @@ void updateElevationMove() {
 
   if (elevMoveDirectionUp) {
     targetReached =
-        angleX >= (elevTarget - angfrenadoelev);
+        angleX >= (elevTarget - kElTargetToleranceDeg);
   } else {
     targetReached =
-        angleX <= (elevTarget + angfrenadoelev);
+        angleX <= (elevTarget + kElTargetToleranceDeg);
   }
 
   if (targetReached) {

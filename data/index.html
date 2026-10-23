@@ -1,0 +1,404 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,user-scalable=no">
+<title>Control Antena</title>
+<style>
+html{font-family:Helvetica,Arial,sans-serif;text-align:center;font-size:14px;background:#f2f3f5;color:#222}body{max-width:1100px;margin:0 auto;padding:6px}
+.button,.button-disabled{display:inline-block;min-width:62px;border:0;color:#fff;padding:6px 8px;text-decoration:none;font-size:14px;margin:2px;border-radius:5px;line-height:1.15}
+.button{background:#3498db;cursor:pointer}.button-disabled{background:#999;color:#eee;pointer-events:none}
+.toolbar,.movebar,.statusbar,.manualbar,.gauges{display:flex;flex-wrap:wrap;justify-content:center;align-items:center;gap:4px;margin:4px 0}
+input[type=number]{width:64px;padding:4px;margin:2px;font-size:14px}.manualbar input[type=number]{width:54px;padding:3px;margin:0;font-size:13px}
+.gauges{gap:6px;margin:5px 0 7px}.gauge-card,.radioinfo{background:#f6f6f6;border:1px solid #ddd;border-radius:7px;padding:4px 6px}
+.gauge-card{min-width:112px}.gauge-title{font-size:13px;color:#444;font-weight:bold;margin-bottom:2px}.gauge-svg{width:112px;height:auto}
+.dial{fill:none;stroke:#555;stroke-width:4}.not-visible-sector{fill:#d9dde1;stroke:#c5c9cd;stroke-width:1}.horizon{stroke:#999;stroke-width:2}.tick-major{stroke:#666;stroke-width:3}.hub{fill:#333;stroke:#333}
+.needle{stroke:#d33;stroke-width:4;stroke-linecap:round}.needle-fill{fill:#d33}.gauge-value{font-size:15px;font-weight:bold;color:#222;margin-top:2px}
+.radioinfo{margin:5px 0;font-size:13px;line-height:1.3}button.button{appearance:none}#sats{min-width:230px;max-width:92vw;padding:4px;font-size:13px}
+
+.controls-grid,.monitor-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:7px;margin:7px 0}
+.group{background:#f7f8fa;border:1px solid #d7dbe0;border-radius:7px;padding:7px;margin:0}
+.group h3{margin:0 0 5px;font-size:16px;color:#333}
+.group-sub{font-size:12px;color:#666;margin:-2px 0 5px}
+.actionrow{display:flex;flex-wrap:wrap;justify-content:center;align-items:center;gap:4px}
+.stepbox{display:grid;grid-template-columns:auto auto auto;grid-template-rows:auto auto auto;gap:3px;align-items:center;justify-content:center;margin:5px auto}
+.step-up{grid-column:2;grid-row:1}.step-left{grid-column:1;grid-row:2}.step-center{grid-column:2;grid-row:2}.step-right{grid-column:3;grid-row:2}.step-down{grid-column:2;grid-row:3}
+.stopbtn{background:#c0392b!important;font-weight:bold;min-width:90px}
+.maintbtn{background:#667!important}
+.modebtn{background:#7b5aa6!important}
+.refstate{display:inline-block;padding:5px 8px;background:#eef1f4;border-radius:6px}
+.activity{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:4px;text-align:left}
+.activity-item{background:#fff;border:1px solid #d7dbe0;border-radius:6px;padding:5px 7px;font-size:13px}
+.led{display:inline-block;width:11px;height:11px;border-radius:50%;margin-right:6px;background:#999;box-shadow:0 0 0 2px #ddd}
+.led.on{background:#f0ad00;box-shadow:0 0 7px #f0ad00}.led.ok{background:#20a44b;box-shadow:0 0 5px #20a44b}.led.err{background:#cf3030;box-shadow:0 0 5px #cf3030}
+.visible-count{display:inline-block;min-width:22px;padding:3px 6px;border-radius:12px;background:#777;color:#fff;font-weight:bold;text-align:center}.visible-count.active{background:#20a44b;box-shadow:0 0 5px #20a44b}
+.activity-detail{display:block;color:#555;margin:2px 0 0 17px;min-height:15px}
+.radio-panel{grid-column:1/-1}.radio-head{display:flex;justify-content:space-between;gap:8px;align-items:center;margin-bottom:3px}.radio-source{font-size:11px;color:#555}
+.radioinfo{margin:0}.radio-table{display:grid;gap:2px;text-align:left}.radio-row{display:grid;grid-template-columns:minmax(130px,1.5fr) minmax(105px,1fr) minmax(105px,1fr) minmax(120px,1fr);gap:5px;align-items:center;background:#fff;border:1px solid #d7dbe0;border-radius:4px;padding:3px 6px;font-size:12px}.radio-labels{background:#e8edf1;color:#566;font-size:10px;font-weight:bold;text-transform:uppercase}.radio-desc{font-weight:bold}.radio-meta{color:#555}.radio-freq{font-variant-numeric:tabular-nums;white-space:nowrap}.radio-empty{padding:5px;color:#666}
+.radio-notice{display:none;margin:0 0 4px;padding:4px 7px;border-radius:4px;background:#fff4d6;border:1px solid #e6bd45;color:#6d5300;font-size:12px;text-align:left}.radio-notice.on{display:block}
+.tracking-row{display:grid;grid-template-columns:auto minmax(330px,1fr);gap:7px;align-items:stretch;margin:5px 0 7px}.tracking-row .gauges{flex-wrap:nowrap;margin:0}.tracking-row>.group{display:flex;flex-direction:column;justify-content:center}
+.sat-identity{margin-top:4px;color:#667;font-size:12px}
+@media(max-width:700px){.tracking-row{grid-template-columns:1fr}.tracking-row .gauges{justify-content:center}.controls-grid,.monitor-grid{grid-template-columns:1fr}.radio-panel{grid-column:auto}.activity{grid-template-columns:1fr}.button,.button-disabled{min-width:58px}.gauge-svg{width:105px}.radio-row{grid-template-columns:minmax(100px,1.35fr) 1fr 1fr}.radio-row>:last-child{grid-column:1/-1;font-size:10px}.radio-labels>:last-child{display:none}.radio-labels>:nth-child(3){text-align:left}}
+</style>
+</head>
+<body>
+<div>V 1.0 Date-Time: <span id="date_time">--</span> - WiFi: <strong id="wifi_text">--</strong> - Modo: <strong id="mode_text">--</strong></div>
+<div><span id="prediction_text">--</span></div>
+
+<div class="tracking-row">
+<div class="gauges">
+  <div class="gauge-card">
+    <div class="gauge-title">Azimut</div>
+    <svg viewBox="0 0 200 200" class="gauge-svg">
+      <circle cx="100" cy="100" r="82" class="dial"/>
+      <line x1="100" y1="18" x2="100" y2="32" class="tick-major"/>
+      <line x1="182" y1="100" x2="168" y2="100" class="tick-major"/>
+      <line x1="100" y1="182" x2="100" y2="168" class="tick-major"/>
+      <line x1="18" y1="100" x2="32" y2="100" class="tick-major"/>
+      <text x="100" y="14" text-anchor="middle">N</text>
+      <text x="188" y="105" text-anchor="middle">E</text>
+      <text x="100" y="198" text-anchor="middle">S</text>
+      <text x="12" y="105" text-anchor="middle">O</text>
+      <g id="az_sat_needle" visibility="hidden">
+        <line x1="100" y1="100" x2="100" y2="22" style="stroke:#1565c0;stroke-width:3;stroke-linecap:round"/>
+      </g>
+      <g id="az_ant_needle">
+        <line x1="100" y1="100" x2="100" y2="42" class="needle"/>
+        <polygon points="100,30 95,44 105,44" class="needle-fill"/>
+      </g>
+      <circle cx="100" cy="100" r="5" class="hub"/>
+    </svg>
+    <div id="az_value" class="gauge-value">ANT --° | SAT --°</div>
+  </div>
+
+  <div class="gauge-card">
+    <div class="gauge-title">Elevación</div>
+    <svg viewBox="0 0 200 200" class="gauge-svg">
+      <path d="M100 100 L100 18 A82 82 0 0 0 18 100 Z" class="not-visible-sector"/>
+      <path d="M100 100 L18 100 A82 82 0 0 0 100 182 Z" class="not-visible-sector"/>
+      <path d="M100 100 L100 182 A82 82 0 0 0 182 100 Z" class="not-visible-sector"/>
+      <circle cx="100" cy="100" r="82" style="fill:none;stroke:#d6d6d6;stroke-width:2"/>
+      <path d="M 182 100 A 82 82 0 0 0 100 18" class="dial"/>
+      <line x1="100" y1="100" x2="182" y2="100" class="horizon"/>
+      <line x1="100" y1="100" x2="100" y2="18" class="tick-major"/>
+      <g style="stroke:#777;stroke-width:2;stroke-linecap:round">
+        <line x1="174" y1="100" x2="182" y2="100"/>
+        <g transform="rotate(-15 100 100)"><line x1="174" y1="100" x2="182" y2="100"/></g>
+        <g transform="rotate(-30 100 100)"><line x1="170" y1="100" x2="182" y2="100"/></g>
+        <g transform="rotate(-45 100 100)"><line x1="168" y1="100" x2="182" y2="100"/></g>
+        <g transform="rotate(-60 100 100)"><line x1="170" y1="100" x2="182" y2="100"/></g>
+        <g transform="rotate(-75 100 100)"><line x1="174" y1="100" x2="182" y2="100"/></g>
+      </g>
+      <text x="188" y="105" text-anchor="middle">0</text>
+      <text x="160" y="47" text-anchor="middle">45</text>
+      <text x="100" y="14" text-anchor="middle">90</text>
+      <g id="el_sat_needle" visibility="hidden">
+        <line x1="100" y1="100" x2="182" y2="100" style="stroke:#1565c0;stroke-width:3;stroke-linecap:round;opacity:.8"/>
+      </g>
+      <g id="el_ant_needle">
+        <line x1="100" y1="100" x2="164" y2="100" class="needle"/>
+        <polygon points="174,100 160,95 160,105" class="needle-fill"/>
+      </g>
+      <circle cx="100" cy="100" r="5" class="hub"/>
+    </svg>
+    <div id="el_value" class="gauge-value">ANT --° | SAT --°</div>
+  </div>
+</div>
+
+<div class="group">
+  <h3>Seguimiento de satélites</h3>
+  <div class="group-sub">Selección del satélite, visibilidad y seguimiento automático</div>
+
+  <div class="statusbar">
+    <form action="/" method="POST" style="margin:0">
+      <label>Satélite </label>
+      <select name="SATS" id="sats"></select>
+      <span id="fav_visible_count" class="visible-count" role="status"
+            aria-label="0 favoritos visibles"
+            title="0 favoritos visibles">0</span>
+      <input type="submit" value="Seleccionar">
+    </form>
+  </div>
+
+  <div class="actionrow">
+    <span>Visible ahora: <strong id="visible_text">--</strong></span>
+    <a id="follow_control" class="button-disabled">Seguir satélite</a>
+    <a class="button" href="/getdata">Actualizar datos</a>
+  </div>
+  <div class="sat-identity">NORAD: <strong id="sat_id">--</strong> · Satélite: <strong id="sat_name">--</strong></div>
+</div>
+</div>
+
+<div class="controls-grid">
+<div class="group radio-panel">
+  <div class="radio-head">
+    <h3>Datos de radio</h3>
+    <span class="radio-source">Fuente: <strong id="radio_source">--</strong></span>
+  </div>
+  <div id="radio_notice" class="radio-notice"></div>
+  <div id="radio_info">--</div>
+</div>
+
+<div class="group">
+  <h3>Control manual</h3>
+  <div class="group-sub">Orientación directa a un azimut y una elevación determinados</div>
+
+  <div class="manualbar">
+    <button type="button" class="button" onclick="sendCmd('/iraorigen')">Ir a origen</button>
+    <span class="refstate">Referencia AZ: <strong id="az_ref_text">--</strong></span>
+
+    <form id="manual_form" style="margin:0;display:flex;flex-wrap:wrap;align-items:center;justify-content:center;gap:4px"
+          autocomplete="off" onsubmit="return sendManual(event)">
+      <label>Azimut
+        <input type="number" id="manual_az" min="0" max="360" step="1" value="0" required inputmode="numeric">°
+      </label>
+      <label>Elevación
+        <input type="number" id="manual_el" min="3" max="90" step="1" value="3" required inputmode="numeric">°
+      </label>
+      <input type="submit" class="button" value="Orientar">
+    </form>
+  </div>
+</div>
+
+<div class="group">
+  <h3>Movimiento por pasos</h3>
+  <div class="group-sub">Ajuste fino manual en azimut y elevación</div>
+
+  <div class="actionrow">
+    <label>Salto
+      <input type="number" id="jog_step" min=".5" max="45" step=".5" value="5">°
+    </label>
+  </div>
+
+  <div class="stepbox">
+    <button type="button" class="button step-up" onclick="sendJog('/arriba')">▲ Arriba</button>
+    <button type="button" class="button step-left" onclick="sendJog('/giroizda')">◀ Izda</button>
+    <div class="step-center"></div>
+    <button type="button" class="button step-right" onclick="sendJog('/girodcha')">Dcha ▶</button>
+    <button type="button" class="button step-down" onclick="sendJog('/abajo')">▼ Abajo</button>
+  </div>
+
+  <div class="actionrow">
+    <button type="button" class="button stopbtn" onclick="sendCmd('/stop')">STOP</button>
+  </div>
+</div>
+
+<div class="group">
+  <h3>Sistema y mantenimiento</h3>
+  <div class="group-sub">Modo de funcionamiento, configuración y calibración</div>
+
+  <div class="actionrow">
+    <a id="sim_control" class="button modebtn" href="/togglesim">Cambiar modo</a>
+    <a class="button maintbtn" href="/config">Configuración</a>
+    <a class="button maintbtn" href="/config?cal=1">Calibración</a>
+  </div>
+</div>
+</div>
+
+<div>Orientación: <strong id="orientation_text">--</strong>
+ - Movimiento: <strong id="motion_text">--</strong></div>
+<div class="monitor-grid">
+<div class="group">
+  <h3>Actividad del programa</h3>
+  <div class="group-sub">Operaciones de red y control en tiempo real</div>
+  <div class="activity">
+    <div class="activity-item"><span id="act_pred_led" class="led"></span><b>Predicción seleccionada</b><span id="act_pred" class="activity-detail">En espera</span></div>
+    <div class="activity-item"><span id="act_vis_led" class="led"></span><b>Búsqueda de visibles</b><span id="act_vis" class="activity-detail">En espera</span></div>
+    <div class="activity-item"><span id="act_fav_led" class="led"></span><b>Comprobación de favoritos</b><span id="act_fav" class="activity-detail">En espera</span></div>
+    <div class="activity-item"><span id="act_radio_led" class="led"></span><b>SatNOGS · radio</b><span id="act_radio" class="activity-detail">Sin consulta</span></div>
+    <div class="activity-item"><span id="act_celes_led" class="led"></span><b>CelesTrak · catálogo</b><span id="act_celes" class="activity-detail">Sin cargar</span></div>
+    <div class="activity-item"><span id="act_track_led" class="led"></span><b>Seguimiento</b><span id="act_track" class="activity-detail">Detenido</span></div>
+  </div>
+</div>
+<div class="group">
+  <h3>Diagnóstico</h3>
+  <div class="group-sub">Estado actualizado del controlador</div>
+  <div>IMU: <strong id="diag_imu">--</strong> · Memoria libre: <strong id="diag_heap">--</strong></div>
+  <div>Predicción: <strong id="diag_prediction">--</strong></div>
+  <div>Último error de red: <strong id="diag_error">--</strong></div>
+  <div>Última parada de seguridad: <strong id="diag_stop">--</strong></div>
+  <div>Tiempo encendido: <strong id="diag_uptime">--</strong></div>
+  <div>Eventos recientes: <span id="diag_events">ninguno</span></div>
+</div>
+</div>
+<script>
+let B=0,T=0,D=2500,M=0,F=0,G=0,RT=0,A=null,E=null,SA=null,SE=null;
+let autoSelecting=false;
+const newlyVisible=new Set();
+const $=i=>document.getElementById(i);
+function W(id,c){let q=$(id);if(q)q.className='led '+c}
+function U(s,loading=false){
+ let o=$('radio_notice');if(!o)return;
+ let pending=loading||s=='none'||s.indexOf('red ocupada')>=0||s.indexOf('caché FFat')>=0;
+ o.textContent=pending?(loading?'Consultando SatNOGS…':'Mostrando los datos disponibles. Recuperando la información completa de SatNOGS…'):'';
+ o.className=pending?'radio-notice on':'radio-notice'
+}
+function H(){
+ let s=$('sats'),q=$('fav_visible_count');if(!s||!q)return;
+ let visible=[...s.options].filter(o=>+o.dataset.state==2).length;
+ q.textContent=visible;
+ q.className=visible?'visible-count active':'visible-count';
+ q.title=visible+' favorito'+(visible==1?'':'s')+' visible'+(visible==1?'':'s');
+ q.setAttribute('aria-label',q.title)
+}
+function Q(ms){clearTimeout(T);T=setTimeout(L,ms)}
+function Y(ms){if(!RT)RT=setTimeout(()=>{RT=0;R()},ms)}
+function O(o,s,pending=true){
+ if(!o||o.dataset.name===undefined)return;
+ let n=o.dataset.name;s=+s;o.dataset.state=s;
+ o.textContent=s==2?'🟢 '+n+' - VISIBLE':s==1?'⚪ '+n+' - NO':(pending?'🟡 '+n+' - COMPROBANDO':'⚠️ '+n+' - SIN DATOS')
+}
+function Z(){
+ let s=$('sats');if(!s)return;
+ let v=s.value,a=[...s.options],r=x=>x==2?0:x==0?1:2;
+ a.sort((x,y)=>{let X=+x.dataset.state||0,Y=+y.dataset.state||0,R=r(X)-r(Y);return R||((+x.dataset.order||0)-(+y.dataset.order||0))});
+ a.forEach(o=>s.appendChild(o));s.value=v
+}
+function P(a,pending){
+ let s=$('sats');if(!s||!Array.isArray(a))return;
+ for(let x of a)for(let o of s.options)if(+o.value==+x.id){
+  let state=+x.state||0;
+  if(state==2&&+o.dataset.state!=2)newlyVisible.add(o.value);
+  if(state==1)newlyVisible.delete(o.value);
+  O(o,state,pending);break
+ }
+ Z()
+ H()
+ selectNewlyVisible()
+}
+async function selectNewlyVisible(){
+ if(autoSelecting||document.hidden||!newlyVisible.size)return;
+ let s=$('sats');if(!s)return;
+ autoSelecting=true;
+ try{
+  // Consultar el estado real antes de cambiar el objetivo del controlador.
+  let r=await fetch('/live?t='+Date.now(),{cache:'no-store'});if(!r.ok)return;
+  let x=await r.json();
+  newlyVisible.delete(String(x.satId));
+  if(x.tracking||x.motion!='IDLE')return;
+  let candidate=[...s.options].find(o=>newlyVisible.has(o.value)&&+o.dataset.state==2);
+  if(!candidate)return;
+  // Usar la misma selección que el formulario: carga posición y radio.
+  r=await fetch('/',{method:'POST',body:new URLSearchParams({SATS:candidate.value}),cache:'no-store'});
+  if(!r.ok)return;
+  newlyVisible.clear();
+  location.reload()
+ }catch(e){}finally{autoSelecting=false}
+}
+async function initPage(){
+ try{
+  let [ir,or,rr]=await Promise.all([
+   fetch('/live?init=1&t='+Date.now(),{cache:'no-store'}),
+   fetch('/live?options=1&t='+Date.now(),{cache:'no-store'}),
+   fetch('/live?radio=1&t='+Date.now(),{cache:'no-store'})
+  ]);
+  if(ir.ok){
+   let d=await ir.json(),o;
+   o=$('date_time');if(o)o.textContent=d.dateTime;
+   o=$('wifi_text');if(o)o.textContent=d.wifi;
+   o=$('mode_text');if(o)o.textContent=d.simulation?'SIMULACIÓN':'REAL';
+   o=$('az_ref_text');if(o)o.textContent=d.azRef?'OK':'SIN FIJAR';
+   o=$('sat_id');if(o)o.textContent=d.satId;
+   o=$('sat_name');if(o)o.textContent=d.satName;
+   o=$('radio_source');if(o)o.textContent=d.radioSource;U(d.radioSource||'none');
+   o=$('sim_control');if(o)o.textContent=d.simulation?'Cambiar a REAL':'Cambiar a SIMULACIÓN'
+  }
+  if(or.ok){let o=$('sats');if(o){o.innerHTML=await or.text();H()}}
+  if(rr.ok){let o=$('radio_info');if(o)o.innerHTML=await rr.text()}
+ }catch(e){}
+}
+async function L(){
+ if(B||document.hidden)return;B=1;
+ try{
+  let r=await fetch('/live?t='+Date.now(),{cache:'no-store'});if(!r.ok)return;
+  let x=await r.json(),a=+x.az,e=+x.el,sa=+x.satAz,se=+x.satEl;
+  if(!isFinite(a)||!isFinite(e)||!isFinite(sa)||!isFinite(se))return;
+  a=((Math.round(a)%360)+360)%360;e=Math.round(e);
+  sa=((Math.round(sa)%360)+360)%360;se=Math.round(se);
+  let o=$('az_ant_needle');if(o&&a!=A)o.setAttribute('transform','rotate('+a+' 100 100)');
+  o=$('az_sat_needle');if(o){if(sa!=SA)o.setAttribute('transform','rotate('+sa+' 100 100)');o.style.visibility=x.targetValid?'visible':'hidden'}
+  o=$('el_ant_needle');if(o&&e!=E)o.setAttribute('transform','rotate('+(-e)+' 100 100)');
+  o=$('el_sat_needle');if(o){if(se!=SE)o.setAttribute('transform','rotate('+(-se)+' 100 100)');o.style.visibility=x.targetValid?'visible':'hidden'}
+  o=$('az_value');if(o)o.textContent='ANT '+a+'° | SAT '+(x.targetValid?sa+'°':'--');
+  o=$('el_value');if(o)o.textContent='ANT '+e+'° | SAT '+(x.targetValid?se+'°':'--');
+  A=a;E=e;SA=sa;SE=se;
+  o=$('mode_text');if(o)o.textContent=x.simulation?'SIMULACIÓN':'REAL';
+  o=$('az_ref_text');if(o)o.textContent=x.azRef?'OK':'SIN FIJAR';
+  o=$('sat_id');if(o)o.textContent=x.satId;
+  o=$('sat_name');if(o)o.textContent=x.satName;
+  o=$('sim_control');if(o)o.textContent=x.simulation?'Cambiar a REAL':'Cambiar a SIMULACIÓN';
+  o=$('prediction_text');if(o)o.textContent=x.prediction;
+  let v=+x.visibleState||0;
+  o=$('visible_text');if(o)o.textContent=v==2?'SI':v==1?'NO':(x.predictionBusy?'COMPROBANDO':'SIN DATOS');
+  let s=$('sats');if(s&&s.selectedIndex>=0){O(s.options[s.selectedIndex],v,x.predictionBusy);H()}
+  o=$('follow_control');
+  if(o){
+   let en=x.tracking||v==2;
+   o.textContent=x.tracking?'Detener seguimiento':'Seguir satélite';
+   o.className=en?'button':'button-disabled';
+   if(en)o.setAttribute('href','/seguirsat');else o.removeAttribute('href')
+  }
+  o=$('orientation_text');if(o)o.textContent=x.orientation;
+  o=$('motion_text');if(o)o.textContent=x.motion;
+  o=$('radio_source');if(o)o.textContent=x.radioSource;U(x.radioSource||'none');
+  o=$('wifi_text');if(o)o.textContent=x.wifi;
+  o=$('diag_imu');if(o)o.textContent=x.imuHealthy?'OK ('+(x.imuAgeMs<0?'simulación':x.imuAgeMs+' ms')+')':'SIN DATOS ('+x.imuAgeMs+' ms)';
+  o=$('diag_heap');if(o)o.textContent=Math.round(x.heap/1024)+' KiB (mín. '+Math.round(x.minHeap/1024)+' KiB, bloque '+Math.round(x.maxBlock/1024)+' KiB)';
+  o=$('diag_prediction');if(o)o.textContent=x.predictionBusy?'actualizando...':(x.targetValid?'hace '+x.predictionAgeSec+' s':(x.predictionAgeSec<0?'sin datos':'caducada · último éxito hace '+x.predictionAgeSec+' s'))+(x.retrySec?' · reintento en '+x.retrySec+' s':'');
+  o=$('diag_error');if(o)o.textContent=x.lastNetworkError;
+  o=$('diag_stop');if(o)o.textContent=x.lastSafetyStop;
+  o=$('diag_uptime');if(o){let u=+x.uptimeSec||0;o.textContent=Math.floor(u/3600)+' h '+Math.floor(u%3600/60)+' min'};
+  o=$('diag_events');if(o)o.textContent=Array.isArray(x.events)&&x.events.length?x.events.map(e=>'['+Math.floor(e.sec/60)+' min] '+e.text).join(' · '):'ninguno';
+  let pe=x.predictionBusy?'Consultando '+x.satName:(x.targetValid?'Datos de hace '+x.predictionAgeSec+' s':(x.retrySec?'Sin datos · reintento en '+x.retrySec+' s':'Sin datos vigentes'));
+  o=$('act_pred');if(o)o.textContent=pe;W('act_pred_led',x.predictionBusy?'on':(x.targetValid?'ok':'err'));
+  let ve=x.visibleBusy?'Consultando N2YO /above':(x.visibleRetrySec?'Reintento en '+x.visibleRetrySec+' s · '+x.visibleLastError:(x.visibleSnapshot?'Lista válida · hace '+x.visibleAgeSec+' s':'Sin lista válida · '+x.visibleLastError));
+  o=$('act_vis');if(o)o.textContent=ve;W('act_vis_led',x.visibleBusy?'on':(x.visibleSnapshot?'ok':(x.visibleRetrySec?'err':'')));
+  let ci=+x.favoriteCurrentId||0,li=+x.favoriteLastId||0,fn='',ln='';if(s)for(let z of s.options){if(ci&&+z.value==ci)fn=z.dataset.name;if(li&&+z.value==li)ln=z.dataset.name}
+  let last=li?'Último '+(ln?ln+' ':'')+'(NORAD '+li+'): '+(+x.favoriteLastState==2?'VISIBLE':+x.favoriteLastState==1?'NO':'sin resultado'):'';
+  let fe=ci?'Comprobando '+(fn||('NORAD '+ci)):(x.visibleSnapshot?'Lista global aplicada'+(last?' · '+last:''):(x.favoriteRetrySec?'Siguiente en '+x.favoriteRetrySec+' s · '+x.favoriteLastError:(last?last:(x.favoriteBusy?'Preparando comprobación':'En espera · '+x.favoriteLastError))));
+  o=$('act_fav');if(o)o.textContent=fe;W('act_fav_led',(ci||x.favoriteBusy)?'on':(li?'ok':''));
+  let rs=x.radioSource||'sin datos',ri=+x.radioNoradId||+x.satId||0,rc=+x.radioHttpCode||0;
+  o=$('act_radio');if(o)o.textContent=(ri?'NORAD '+ri+' · ':'')+rs+(rc?' · HTTP '+rc:'');W('act_radio_led',rs=='SatNOGS'?'ok':(rc<0||rs.indexOf('fallo')>=0?'err':(rs!='none'?'on':'')));
+  if((rs.indexOf('red ocupada')>=0||rs.indexOf('caché FFat')>=0)&&!M)Y(15000);
+  let cs=x.celestrakStatus||'No cargado',cc=+x.celestrakCount||0,cl=cs.toLowerCase();
+  o=$('act_celes');if(o)o.textContent=cs+(cc?' · '+cc+' satélites':'');W('act_celes_led',cl.indexOf('error')>=0||cl.indexOf('sin ')>=0||cl.indexOf('incompleta')>=0?'err':(cc?'ok':''));
+  o=$('act_track');if(o)o.textContent=x.tracking?('Siguiendo '+x.satName):'Detenido';W('act_track_led',x.tracking?'ok':'');
+  M=x.motion!='IDLE';D=2500
+ }catch(e){}finally{B=0;if(!document.hidden)Q(D)}
+}
+async function R(){
+ if(document.hidden||M||G)return;G=1;
+ U('',true);
+ try{let r=await fetch('/live?radio=1&retry=1&t='+Date.now(),{cache:'no-store'});if(r.ok){let o=$('radio_info');if(o)o.innerHTML=await r.text()}}
+ catch(e){}finally{G=0;Q(50)}
+}
+async function V(){
+ if(document.hidden)return;if(M){setTimeout(V,10000);return}if(F)return;F=1;
+ try{
+  let r=await fetch('/live?favorites=1&t='+Date.now(),{cache:'no-store'});if(!r.ok)return;
+  let x=await r.json();P(x.favorites,x.favoritesRefreshing);if(x.favoritesRefreshing)setTimeout(V,5000)
+ }catch(e){}finally{F=0}
+}
+function J(){
+ let i=$('jog_step'),v=+i.value;if(!isFinite(v))v=5;
+ v=Math.round(Math.max(.5,Math.min(45,v))*2)/2;i.value=v;
+ try{localStorage.rotorJogStep=v}catch(e){}return v
+}
+function I(){
+ let i=$('jog_step');if(!i)return;
+ try{let v=+localStorage.rotorJogStep;if(v>=.5&&v<=45)i.value=Math.round(v*2)/2}catch(e){}
+ i.addEventListener('change',J)
+}
+function sendJog(u){sendCmd(u+'?step='+encodeURIComponent(J()))}
+function sendManual(ev){
+ ev.preventDefault();let a=$('manual_az'),e=$('manual_el');
+ if(!a.checkValidity()){a.reportValidity();return false}
+ if(!e.checkValidity()){e.reportValidity();return false}
+ sendCmd('/orientarmanual?az='+parseInt(a.value,10)+'&el='+parseInt(e.value,10));return false
+}
+async function sendCmd(u){try{await fetch(u,{cache:'no-store'})}catch(e){}finally{Q(50)}}
+document.addEventListener('visibilitychange',()=>{if(!document.hidden){Q(0);V()}});
+I();initPage().finally(()=>Q(0));setTimeout(V,5000);setInterval(V,60000);
+</script>
+</body>
+</html>

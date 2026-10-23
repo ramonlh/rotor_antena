@@ -26,4 +26,7 @@ float simAzSpeedDegPerSec = 20.0f;   // 30 grados/segundo
 float simElSpeedDegPerSec = 10.0f;   // 15 grados/segundo
 unsigned long simLastUpdateMs = 0;
 
+// 30 posiciones ocupan unos 5,6 KiB y dejan margen holgado en el búfer.
+// Treinta segundos mantienen la resolución local de un segundo y producen
+// una respuesta que cabe con margen en el buffer HTTP de 16 KiB.
 const uint32_t kPredictionWindowSec = 30;

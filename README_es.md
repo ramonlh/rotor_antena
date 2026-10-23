@@ -87,9 +87,15 @@ rotor_antena/
 │
 ├── network_services.*
 ├── storage_services.*
+├── http_buffer.*
+├── diagnostic_log.*
+├── ntfy_notifications.*
 │
+├── data/                      # Páginas web y catálogo amateur
+├── web_assets.*
+├── web_assets_data.h          # Generado por generate_web_assets.sh
+├── generate_web_assets.sh
 ├── web_handlers.*
-├── web_pages.*
 ├── web_routes.*
 ├── web_ui.*
 │
@@ -101,7 +107,6 @@ rotor_antena/
 ├── sat_tracking.*
 ├── sat_visibility.*
 ├── sat_visible_now.*
-├── satellite_tracker.*
 │
 ├── config.h
 ├── config_core.h
@@ -109,7 +114,7 @@ rotor_antena/
 ├── config_network.h
 ├── config_pins.h
 ├── config_services.h
-└── config_secrets_template.h
+└── config_secrets.example.h
 ```
 
 ---
@@ -190,14 +195,17 @@ La configuración está separada en varios ficheros para que el proyecto sea má
 
 Además, el repositorio incluye una plantilla:
 
-- `config_secrets_template.h`
+- `config_secrets.example.h`
 
 ### Recomendación de uso
 
-1. Copia `config_secrets_template.h`
-2. Renómbralo a `config_secrets.h`
-3. Rellena SSID, contraseña, claves o datos privados
-4. Añade `config_secrets.h` a `.gitignore`
+1. Copia `config_secrets.example.h` como `config_secrets.h`
+2. Rellena SSID, contraseñas (AP, FTP, OTA), clave N2YO, tema ntfy y la
+   ubicación de la estación (`MY_LAT`, `MY_LON`, `MY_ALT_M`)
+3. `config_secrets.h` ya está en `.gitignore`: no lo subas nunca
+
+Después de modificar cualquier página de `data/`, ejecuta
+`bash generate_web_assets.sh` para regenerar `web_assets_data.h`.
 
 ---
 

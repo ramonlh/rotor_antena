@@ -1,9 +1,10 @@
 #pragma once
 #include <Arduino.h>
+#include "fixed_text.h"
 
 struct SatFavoriteItem {
   long noradId;
-  String name;
+  FixedText<32> name;
 };
 
 bool initSatFavorites();

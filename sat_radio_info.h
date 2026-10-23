@@ -8,3 +8,4 @@ bool refreshRadioInfoForSat(long noradId);
 
 const char* getRadioInfoSourceText();
 int getLastRadioHttpCode();
+long getRadioInfoNoradId();

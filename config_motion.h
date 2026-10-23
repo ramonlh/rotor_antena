@@ -29,6 +29,10 @@ constexpr unsigned long kNoProgressTimeoutMs = 3000UL;
 constexpr float kMinAzSpeedDegPerSec = 1.0f;
 constexpr float kMinElSpeedDegPerSec = 0.5f;
 
+// Límite software inferior del eje de elevación.
+// Evita trabajar normalmente sobre el fin de carrera de 0 grados.
+constexpr float kMinElevationDeg = 3.0f;
+
 
 // ---------------------------------------------------------
 // TIEMPOS DE SEGURIDAD
@@ -38,8 +42,23 @@ constexpr float kMinElSpeedDegPerSec = 0.5f;
 constexpr unsigned long kMoveMarginMs = 5000UL;
 
 // Límite absoluto de cualquier maniobra.
-constexpr unsigned long kAbsoluteMoveTimeoutMs = 240000UL;
+constexpr unsigned long kAbsoluteMoveTimeoutMs = 420000UL;
 
+// ---------------------------------------------------------
+// LÍMITES DE CABLEADO DEL EJE DE AZIMUT
+// ---------------------------------------------------------
+
+// Dirección de respaldo si todavía no existe una referencia del final
+// izquierdo. En funcionamiento, el centro se calcula como final izquierdo
+// + 180 grados.
+constexpr float kAzCableCenterDeg = 0.0f;
+
+// Recorrido físico permitido desde el centro calculado. El final izquierdo
+// está en -180 grados (AZ 200 con la calibración actual) y el derecho está
+// 320 grados después, en +140 grados (AZ 160). Por tanto, el sector
+// geográfico abierto 160..200 no es alcanzable y debe rechazarse.
+constexpr float kAzCableMinDeg = -180.0f;
+constexpr float kAzCableMaxDeg =  140.0f;
 
 // ---------------------------------------------------------
 // TIEMPO PERMITIDO SEGÚN DISTANCIA

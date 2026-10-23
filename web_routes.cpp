@@ -15,6 +15,7 @@ void initWebRoutes() {
   server.on("/abajo", handleAbajo);
   server.on("/giroizda", handleGiroIzda);
   server.on("/girodcha", handleGiroDcha);
+  server.on("/stop", handleStop);
   server.on("/getdata", handleGetData);
   server.on("/reset", handleReset);
   server.on("/togglesim", handleToggleSim);
@@ -24,11 +25,14 @@ void initWebRoutes() {
   server.on("/addfavoritecustom", handleAddFavoriteCustom);
   server.on("/config", handleConfigPage);
   server.on("/restorefavorites", handleRestoreFavorites);
-  server.on("/config", handleConfigPage);
   server.on("/reloadfavorites", handleReloadFavorites);
+  server.on("/loadamateur", handleLoadAmateurCatalog);
+  server.on("/refreshamateur", handleRefreshAmateurCatalog);
+  server.on("/inspectsat", handleInspectSatellite);
   server.on("/searchsat", handleSearchSat);
   server.on("/addfavoritefromsearch", handleAddFavoriteFromSearch);
   server.on("/searchvisible", handleSearchVisibleNow);
   server.on("/selectvisible", handleSelectVisibleSat);
   server.on("/addvisiblefavorite", handleAddVisibleSatToFavorites);
+  server.on("/testntfy", handleTestNtfy);
 }

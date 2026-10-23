@@ -30,20 +30,27 @@ void enableElevation() {
 }
 
 void disableElevation() {
-  if (simulationMode) {
-    Serial.println("SIM: enableElevation");
-    return;
-    }  
+  // Apagar los relés siempre, también en simulación: si se cambia de modo
+  // con un movimiento real en curso, el motor no debe quedar activado.
   digitalWrite(kElevpin, OFF);
   digitalWrite(kElev1pin, OFF);
   digitalWrite(kElev2pin, OFF);
 }
 
+void setElevationDirectionUp() {
+  // En este rotor, ambos relés de sentido activados hacen subir.
+  digitalWrite(kElev1pin, ON);
+  digitalWrite(kElev2pin, ON);
+}
+
+void setElevationDirectionDown() {
+  // En este rotor, ambos relés de sentido desactivados hacen bajar.
+  digitalWrite(kElev1pin, OFF);
+  digitalWrite(kElev2pin, OFF);
+}
+
 void disableRotation() {
-  if (simulationMode) {
-    Serial.println("SIM: enableElevation");
-    return;
-    }    
+  // Igual que disableElevation(): apagar siempre los relés.
   digitalWrite(kGiropin, OFF);
   digitalWrite(kGiro1pin, OFF);
   digitalWrite(kGiro2pin, OFF);

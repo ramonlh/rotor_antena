@@ -3,16 +3,20 @@
 #include <Arduino.h>
 #include <WiFi.h>
 #include <HTTPClient.h>
-#include "Arduino_JSON.h"
+#include <FFat.h>
 #include "sat_radio_info.h"
+#include "sat_fetch.h"
+#include "http_buffer.h"
+#include "fixed_text.h"
+#include "storage_services.h"
 
 struct SatTxInfo {
-  String description;
-  String downlink;
-  String uplink;
-  String mode;
-  String service;
-  String status;
+  FixedText<64> description;
+  FixedText<24> downlink;
+  FixedText<24> uplink;
+  FixedText<24> mode;
+  FixedText<20> service;
+  FixedText<16> status;
 };
 
 static SatTxInfo gTx[12];
@@ -20,8 +24,153 @@ static int gTxCount = 0;
 static long gTxNorad = 0;
 static bool gTxLoaded = false;
 
-static String gRadioSource = "none";
+static FixedText<48> gRadioSource = "none";
 static int gLastRadioHttpCode = 0;
+
+static constexpr uint32_t kRadioCacheMagic = 0x52414431UL;
+static constexpr uint16_t kRadioCacheVersion = 1;
+
+struct RadioCache {
+  uint32_t magic;
+  uint16_t version;
+  uint16_t count;
+  int32_t norad;
+  SatTxInfo tx[12];
+  uint32_t check;
+};
+static RadioCache gRadioCacheBuffer;
+
+static void radioCachePaths(
+    long noradId,
+    char* cachePath,
+    size_t cachePathSize,
+    char* tempPath,
+    size_t tempPathSize) {
+  snprintf(cachePath, cachePathSize, "/radio_%ld.bin", noradId);
+  snprintf(tempPath, tempPathSize, "/radio_%ld.tmp", noradId);
+}
+
+static uint32_t radioCacheCheck(const RadioCache& cache) {
+  const uint8_t* bytes = reinterpret_cast<const uint8_t*>(&cache);
+  uint32_t hash = 2166136261UL;
+  for (size_t i = 0; i < sizeof(cache) - sizeof(cache.check); ++i) {
+    hash = (hash ^ bytes[i]) * 16777619UL;
+  }
+  return hash;
+}
+
+static bool loadRadioCache(long noradId) {
+  if (!isStorageReady()) return false;
+  char cachePath[32];
+  char tempPath[32];
+  radioCachePaths(
+      noradId, cachePath, sizeof(cachePath), tempPath, sizeof(tempPath));
+  File file = FFat.open(cachePath, "r");
+  if (!file) return false;
+  RadioCache& cache = gRadioCacheBuffer;
+  memset(&cache, 0, sizeof(cache));
+  const size_t read = file.read(
+      reinterpret_cast<uint8_t*>(&cache), sizeof(cache));
+  file.close();
+  if (read != sizeof(cache) ||
+      cache.magic != kRadioCacheMagic ||
+      cache.version != kRadioCacheVersion ||
+      cache.count > 12 || cache.count == 0 ||
+      cache.norad != noradId ||
+      cache.check != radioCacheCheck(cache)) return false;
+
+  gTxCount = cache.count;
+  gTxNorad = cache.norad;
+  gTxLoaded = true;
+  for (int i = 0; i < gTxCount; ++i) gTx[i] = cache.tx[i];
+  return true;
+}
+
+static bool saveRadioCache() {
+  if (!isStorageReady() || !gTxLoaded || gTxCount <= 0) return false;
+  RadioCache& cache = gRadioCacheBuffer;
+  memset(&cache, 0, sizeof(cache));
+  cache.magic = kRadioCacheMagic;
+  cache.version = kRadioCacheVersion;
+  cache.count = gTxCount;
+  cache.norad = gTxNorad;
+  for (int i = 0; i < gTxCount; ++i) cache.tx[i] = gTx[i];
+  cache.check = radioCacheCheck(cache);
+
+  char cachePath[32];
+  char tempPath[32];
+  radioCachePaths(
+      gTxNorad, cachePath, sizeof(cachePath), tempPath, sizeof(tempPath));
+  FFat.remove(tempPath);
+  File file = FFat.open(tempPath, "w");
+  if (!file) return false;
+  const size_t written = file.write(
+      reinterpret_cast<const uint8_t*>(&cache), sizeof(cache));
+  file.close();
+  if (written != sizeof(cache)) {
+    FFat.remove(tempPath);
+    return false;
+  }
+  FFat.remove(cachePath);
+  if (!FFat.rename(tempPath, cachePath)) {
+    FFat.remove(tempPath);
+    return false;
+  }
+  return true;
+}
+
+static const char* radioObjectEnd(const char* object) {
+  int depth = 0;
+  bool quoted = false;
+  bool escaped = false;
+  for (const char* p = object; *p != '\0'; ++p) {
+    if (quoted) {
+      if (escaped) escaped = false;
+      else if (*p == '\\') escaped = true;
+      else if (*p == '\"') quoted = false;
+      continue;
+    }
+    if (*p == '\"') quoted = true;
+    else if (*p == '{') ++depth;
+    else if (*p == '}' && --depth == 0) return p;
+  }
+  return nullptr;
+}
+
+template <size_t N>
+static bool radioJsonString(
+    const char* object, const char* objectEnd,
+    const char* key, FixedText<N>& value) {
+  const char* field = strstr(object, key);
+  if (field == nullptr || field >= objectEnd) return false;
+  const char* colon = strchr(field, ':');
+  if (colon == nullptr || colon >= objectEnd) return false;
+  while (++colon < objectEnd && (*colon == ' ' || *colon == '\t')) {}
+  if (colon >= objectEnd || *colon != '\"') return false;
+  char decoded[N];
+  size_t length = 0;
+  for (const char* p = colon + 1; p < objectEnd; ++p) {
+    if (*p == '\"') {
+      decoded[length] = '\0';
+      value = decoded;
+      return true;
+    }
+    if (*p == '\\' && p + 1 < objectEnd) ++p;
+    if (length + 1 < N) decoded[length++] = *p;
+  }
+  return false;
+}
+
+static bool radioJsonNumber(
+    const char* object, const char* objectEnd,
+    const char* key, double& value) {
+  const char* field = strstr(object, key);
+  if (field == nullptr || field >= objectEnd) return false;
+  const char* colon = strchr(field, ':');
+  char* end = nullptr;
+  value = colon != nullptr ? strtod(colon + 1, &end) : 0.0;
+  return colon != nullptr && end != colon + 1 && end <= objectEnd;
+}
 
 static void clearTxCache() {
   gTxCount = 0;
@@ -40,184 +189,150 @@ static void clearTxCache() {
   }
 }
 
-static String hzToMHzString(double hz) {
-  if (hz <= 0.0) return "-";
-  return String(hz / 1000000.0, 6) + " MHz";
-}
-
-// Fallback local mínimo
-static bool loadLocalFallback(long noradId) {
-  clearTxCache();
-  gTxNorad = noradId;
-
-  if (noradId == 25544) {
-    gTx[0] = {"FM voice", "145.800 MHz", "145.200 MHz", "FM", "Voice", "active"};
-    gTx[1] = {"Crossband repeater", "145.800 MHz", "437.800 MHz", "FM", "Repeater", "active"};
-    gTx[2] = {"Packet/APRS", "145.825 MHz", "145.825 MHz", "AFSK/AX.25", "Packet", "active"};
-    gTxCount = 3;
-    gTxLoaded = true;
-    return true;
+static void setHzText(double hz, FixedText<24>& target) {
+  if (hz <= 0.0) {
+    target = "-";
+    return;
   }
-
-  if (noradId == 48274) {
-    gTx[0] = {"Tiangong voice/telemetry", "-", "-", "Unknown", "Unknown", "unknown"};
-    gTxCount = 1;
-    gTxLoaded = true;
-    return true;
-  }
-
-  if (noradId == 7530) {
-    gTx[0] = {"Mode U/V beacon", "145.977500 MHz", "-", "CW", "Beacon", "active"};
-    gTxCount = 1;
-    gTxLoaded = true;
-    return true;
-  }
-
-  if (noradId == 22825) {
-    gTx[0] = {"Mode U CW Beacon", "435.795000 MHz", "-", "CW", "Beacon", "active"};
-    gTxCount = 1;
-    gTxLoaded = true;
-    return true;
-  }
-
-  if (noradId == 27607) {
-    gTx[0] = {"FM voice CTCSS 67 Hz", "436.795000 MHz", "145.850000 MHz", "FM", "Voice", "active"};
-    gTxCount = 1;
-    gTxLoaded = true;
-    return true;
-  }
-
-  if (noradId == 39444) {
-    gTx[0] = {"Linear transponder", "145.950000 MHz", "435.130000 MHz", "USB/LSB", "Amateur", "active"};
-    gTxCount = 1;
-    gTxLoaded = true;
-    return true;
-  }
-
-  if (noradId == 43017) {
-    gTx[0] = {"DUV telemetry", "145.960000 MHz", "-", "DUV", "Telemetry", "active"};
-    gTxCount = 1;
-    gTxLoaded = true;
-    return true;
-  }
-
-  if (noradId == 43137) {
-    gTx[0] = {"DUV telemetry", "145.880000 MHz", "-", "DUV", "Telemetry", "decayed"};
-    gTxCount = 1;
-    gTxLoaded = true;
-    return true;
-  }
-
-  return false;
+  char text[24];
+  snprintf(text, sizeof(text), "%.6f MHz", hz / 1000000.0);
+  target = text;
 }
 
 bool refreshRadioInfoForSat(long noradId) {
   clearTxCache();
 
-  bool haveLocal = loadLocalFallback(noradId);
+  const bool haveCache = loadRadioCache(noradId);
 
   Serial.println("=== refreshRadioInfoForSat ===");
   Serial.print("NORAD solicitado: ");
   Serial.println(noradId);
-  Serial.print("Fallback local disponible: ");
-  Serial.println(haveLocal ? "SI" : "NO");
+  Serial.print("Cache FFat disponible: ");
+  Serial.println(haveCache ? "SI" : "NO");
 
   if (WiFi.status() != WL_CONNECTED) {
-    gRadioSource = haveLocal ? "fallback local (sin WiFi)" : "sin datos (sin WiFi)";
-    return haveLocal;
+    gRadioSource = haveCache ? "caché FFat (sin WiFi)" : "sin datos (sin WiFi)";
+    return haveCache;
+  }
+
+  // No abrir dos conexiones TLS a la vez: en el ESP32 los buffers de
+  // N2YO y SatNOGS juntos pueden agotar o fragmentar el heap.
+  if (!tryBeginN2yoRequest()) {
+    gRadioSource = haveCache
+        ? "caché FFat (red ocupada)"
+        : "sin datos (red ocupada)";
+    return haveCache;
   }
 
   HTTPClient http;
 
-  String url = "https://db.satnogs.org/api/transmitters/?format=json&alive=true&satellite__norad_cat_id=" + String(noradId);
+  char url[160];
+  snprintf(url, sizeof(url),
+           "https://db.satnogs.org/api/transmitters/?format=json&alive=true&satellite__norad_cat_id=%ld",
+           noradId);
   Serial.print("URL SatNOGS: ");
   Serial.println(url);
 
   http.begin(url);
-  int code = http.GET();
+  http.useHTTP10(true);
   http.setConnectTimeout(3000);
-  http.setTimeout(5000);
+  http.setTimeout(12000);
+  int code = http.GET();
   gLastRadioHttpCode = code;
   Serial.print("HTTP code: ");
   Serial.println(code);
 
-  if (code <= 0) {
+  if (code != HTTP_CODE_OK) {
     http.end();
-    gRadioSource = haveLocal ? "fallback local (HTTP fallo)" : "sin datos (HTTP fallo)";
-    return haveLocal;
+    endN2yoRequest();
+    gRadioSource = haveCache ? "caché FFat (HTTP fallo)" : "sin datos (HTTP fallo)";
+    return haveCache;
   }
 
-  String payload = http.getString();
+  const char* payload = nullptr;
+  size_t payloadLength = 0;
+  // Sólo se muestran 12 transmisores: si la respuesta completa supera el
+  // búfer, son suficientes los primeros objetos completos recibidos.
+  const bool bodyOk = readHttpBody(http, payload, payloadLength, true);
   http.end();
+  if (!bodyOk) {
+    endN2yoRequest();
+    gRadioSource = haveCache
+        ? "caché FFat (respuesta incompleta)"
+        : "sin datos (respuesta incompleta)";
+    return haveCache;
+  }
 
   Serial.print("Payload len: ");
-  Serial.println(payload.length());
+  Serial.println(payloadLength);
 
-  JSONVar root = JSON.parse(payload);
-  if (JSON.typeof(root) != "array") {
-    gRadioSource = haveLocal ? "fallback local (JSON invalido)" : "sin datos (JSON invalido)";
-    return haveLocal;
+  const char* json = payload;
+  while (*json == ' ' || *json == '\r' || *json == '\n' || *json == '\t') ++json;
+  if (*json != '[') {
+    gRadioSource = haveCache ? "caché FFat (JSON inválido)" : "sin datos (JSON inválido)";
+    endN2yoRequest();
+    return haveCache;
   }
 
   clearTxCache();
   gTxNorad = noradId;
 
-  int n = root.length();
-  Serial.print("Transmitters recibidos: ");
-  Serial.println(n);
+  int n = 0;
+  const char* cursor = json + 1;
+  while (*cursor != '\0' && gTxCount < 12) {
+    const char* object = strchr(cursor, '{');
+    if (object == nullptr) break;
+    const char* objectEnd = radioObjectEnd(object);
+    if (objectEnd == nullptr) break;
+    cursor = objectEnd + 1;
+    ++n;
 
-  for (int i = 0; i < n && gTxCount < 12; ++i) {
-    JSONVar item = root[i];
+    radioJsonString(object, objectEnd, "\"description\"", gTx[gTxCount].description);
+    radioJsonString(object, objectEnd, "\"mode\"", gTx[gTxCount].mode);
+    radioJsonString(object, objectEnd, "\"service\"", gTx[gTxCount].service);
+    radioJsonString(object, objectEnd, "\"status\"", gTx[gTxCount].status);
 
-    String description = JSON.typeof(item["description"]) != "undefined" ? String(item["description"]) : "";
-    String mode        = JSON.typeof(item["mode"]) != "undefined" ? String(item["mode"]) : "";
-    String service     = JSON.typeof(item["service"]) != "undefined" ? String(item["service"]) : "";
-    String status      = JSON.typeof(item["status"]) != "undefined" ? String(item["status"]) : "";
+    double frequency = 0.0;
+    if (radioJsonNumber(object, objectEnd, "\"downlink_low\"", frequency) ||
+        radioJsonNumber(object, objectEnd, "\"downlink\"", frequency))
+      setHzText(frequency, gTx[gTxCount].downlink);
+    else gTx[gTxCount].downlink = "-";
 
-    gTx[gTxCount].description = description;
-    gTx[gTxCount].mode        = mode;
-    gTx[gTxCount].service     = service;
-    gTx[gTxCount].status      = status;
-
-    if (JSON.typeof(item["downlink_low"]) != "undefined")
-      gTx[gTxCount].downlink = hzToMHzString(double(item["downlink_low"]));
-    else if (JSON.typeof(item["downlink"]) != "undefined")
-      gTx[gTxCount].downlink = hzToMHzString(double(item["downlink"]));
-    else
-      gTx[gTxCount].downlink = "-";
-
-    if (JSON.typeof(item["uplink_low"]) != "undefined")
-      gTx[gTxCount].uplink = hzToMHzString(double(item["uplink_low"]));
-    else if (JSON.typeof(item["uplink"]) != "undefined")
-      gTx[gTxCount].uplink = hzToMHzString(double(item["uplink"]));
-    else
-      gTx[gTxCount].uplink = "-";
+    if (radioJsonNumber(object, objectEnd, "\"uplink_low\"", frequency) ||
+        radioJsonNumber(object, objectEnd, "\"uplink\"", frequency))
+      setHzText(frequency, gTx[gTxCount].uplink);
+    else gTx[gTxCount].uplink = "-";
 
     Serial.print("TX ");
     Serial.print(gTxCount);
     Serial.print(": ");
-    Serial.print(description);
+    Serial.print(gTx[gTxCount].description.c_str());
     Serial.print(" | DL=");
     Serial.print(gTx[gTxCount].downlink);
     Serial.print(" | UL=");
     Serial.print(gTx[gTxCount].uplink);
     Serial.print(" | MODE=");
-    Serial.println(mode);
+    Serial.println(gTx[gTxCount].mode.c_str());
 
     ++gTxCount;
   }
 
+  Serial.print("Transmitters analizados: ");
+  Serial.println(n);
+
   gTxLoaded = (gTxCount > 0);
+  endN2yoRequest();
 
   Serial.print("TX matches finales: ");
   Serial.println(gTxCount);
 
   if (!gTxLoaded) {
-    bool ok = loadLocalFallback(noradId);
-    gRadioSource = ok ? "fallback local (sin TX online)" : "sin datos";
-    return ok;
+    const bool restored = loadRadioCache(noradId);
+    gRadioSource = restored ? "caché FFat (sin TX online)" : "sin datos";
+    return restored;
   }
 
+  saveRadioCache();
   gRadioSource = "SatNOGS";
   return true;
 }
@@ -228,26 +343,41 @@ String buildRadioInfoHtml(long noradId) {
   }
 
   String out;
+  out.reserve(4096);
   out += "<div class='radioinfo'>";
-  out += "<strong>Radio</strong><br>";
 
   if (!gTxLoaded || gTxCount == 0) {
-    out += "Sin datos de radio.<br></div>";
+    out += "<div class='radio-empty'>Sin datos de radio para este satélite.</div></div>";
     return out;
   }
 
+  out += "<div class='radio-table'>";
+  out += "<div class='radio-row radio-labels'><span>Transmisor</span>";
+  out += "<span>Bajada (RX)</span><span>Subida (TX)</span>";
+  out += "<span>Modo · servicio · estado</span></div>";
   for (int i = 0; i < gTxCount; ++i) {
-    out += "- ";
-    if (gTx[i].description.length()) out += gTx[i].description; else out += "TX";
-    out += " | DL: " + gTx[i].downlink;
-    out += " | UL: " + gTx[i].uplink;
-    if (gTx[i].mode.length()) out += " | " + gTx[i].mode;
-    if (gTx[i].service.length()) out += " | " + gTx[i].service;
-    if (gTx[i].status.length()) out += " | " + gTx[i].status;
-    out += "<br>";
+    out += "<div class='radio-row'><span class='radio-desc'>";
+    if (gTx[i].description.length()) out += gTx[i].description.c_str();
+    else out += "Transmisor";
+    out += "</span><span class='radio-freq'>";
+    out += gTx[i].downlink.c_str();
+    out += "</span><span class='radio-freq'>";
+    out += gTx[i].uplink.c_str();
+    out += "</span><span class='radio-meta'>";
+    if (gTx[i].mode.length()) out += gTx[i].mode.c_str();
+    if (gTx[i].service.length()) {
+      if (gTx[i].mode.length()) out += " · ";
+      out += gTx[i].service.c_str();
+    }
+    if (gTx[i].status.length()) {
+      out += " · ";
+      out += gTx[i].status.c_str();
+    }
+    out += "</span></div>";
   }
 
-  out += "</div>";
+  out += "</div></div>";
+
   return out;
 }
 
@@ -257,4 +387,8 @@ const char* getRadioInfoSourceText() {
 
 int getLastRadioHttpCode() {
   return gLastRadioHttpCode;
+}
+
+long getRadioInfoNoradId() {
+  return gTxNorad;
 }

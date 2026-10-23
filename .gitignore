@@ -1,0 +1,7 @@
+# Credenciales y claves privadas del dispositivo
+config_secrets.h
+
+# Salidas locales y configuración de Claude Code
+output/
+.claude/
+CLAUDE.md

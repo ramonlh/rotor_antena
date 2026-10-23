@@ -4,4 +4,4 @@ void initWifi();
 void initOta();
 
 bool isWifiConnected();
-String getWifiStatusText();
+const char* getWifiStatusText();

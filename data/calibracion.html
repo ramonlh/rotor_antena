@@ -1,0 +1,253 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Calibración rotor</title>
+<style>
+html{font-family:Helvetica,Arial,sans-serif;background:#f2f3f5;color:#222;font-size:14px}
+body{max-width:1100px;margin:0 auto;padding:7px}
+h2{font-size:21px;margin:6px 0}h3{font-size:17px;margin:0 0 6px}p{margin:5px 0;line-height:1.3}
+.top{display:flex;gap:5px;flex-wrap:wrap;align-items:center}
+main{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;margin-top:8px}
+.card{background:#fff;border:1px solid #d5d8dc;border-radius:8px;padding:9px;margin:0}
+.card.reference{grid-column:1/-1}
+.step{border-left:3px solid #3498db;padding-left:8px;margin:8px 0}
+.ok{color:#17823b;font-weight:bold}.warn{background:#fff4d6;border:1px solid #e6bd45;border-radius:6px;padding:7px}
+.danger{background:#ffe5e5;border:1px solid #d66;border-radius:6px;padding:7px}
+.button{display:inline-block;border:0;border-radius:5px;background:#3498db;color:#fff;padding:7px 10px;margin:2px;text-decoration:none;font-size:14px;cursor:pointer}
+.stop{background:#c0392b}.secondary{background:#667}.button:disabled{background:#aaa;cursor:not-allowed}
+input[type=number]{width:78px;padding:4px;font-size:15px}
+.live{display:grid;grid-template-columns:repeat(4,1fr);gap:5px;background:#eef5fb;border-radius:6px;padding:7px;margin:7px 0}
+.live span{text-align:center}.live b{font-size:16px}.status{padding:5px;border-radius:5px;background:#eee;margin:4px 0}
+.small{font-size:12px;color:#555}
+@media(max-width:700px){main{grid-template-columns:1fr}.card.reference{grid-column:auto}.live{grid-template-columns:repeat(2,1fr)}}
+</style>
+</head>
+<body>
+<div class="top">
+ <a class="button secondary" href="/">← Rotor</a>
+ <a class="button secondary" href="/config">Config</a>
+ <button class="button stop" onclick="cmd('/stop')">STOP</button>
+</div>
+
+<h2>Calibración del rotor</h2>
+
+<div class="danger">
+ <b>Supervisar físicamente todo el proceso.</b>
+ Los finales de carrera sólo cortan el motor; el ESP32 detecta el final porque
+ primero observa movimiento y después inmovilidad. Un atasco mecánico podría
+ parecer un final de carrera.
+</div>
+
+<div class="live">
+ <span>AZ actual: <b id="az">--</b>°</span>
+ <span>EL corregida: <b id="el">--</b>°</span>
+ <span>EL JY901 bruta: <b id="elraw">--</b>°</span>
+ <span>Estado: <b id="motion">--</b></span>
+</div>
+
+<main>
+<div class="card">
+<h3>1. Calibración inicial de AZ</h3>
+<p>Se hace una vez después de fijar físicamente el rotor en el mástil, o cuando
+se quiera volver a determinar con precisión la orientación absoluta.</p>
+
+<div class="step">
+<b>Paso 1 — Separar el rotor del final izquierdo</b>
+<p>La antena debe estar varios grados a la derecha del final izquierdo. Si ya
+está apoyada en el final, el sistema no podrá comprobar que hubo movimiento.</p>
+</div>
+
+<div class="step">
+<b>Paso 2 — Buscar el final izquierdo</b>
+<p>Pulse el botón. El rotor girará hacia la izquierda hasta que el final de
+carrera corte el motor. No mida todavía mientras esté moviéndose.</p>
+<button class="button" onclick="findAz()">Buscar final izquierdo</button>
+<div id="azFind" class="status">Esperando.</div>
+</div>
+
+<div class="step">
+<b>Paso 3 — Medir el azimut real</b>
+<p>Cuando indique <b>FIN IZQUIERDO DETECTADO</b>, la antena permanecerá en ese
+punto. Mida su azimut con una brújula externa e introduzca aquí el
+<b>azimut verdadero/geográfico</b>. Si la brújula indica norte magnético,
+corrija la declinación magnética.</p>
+<label>Azimut del final izquierdo:
+ <input id="azLeft" type="number" min="0" max="359.9" step=".1" value=""> °
+</label>
+<p class="small">Valor guardado actualmente: <strong id="azSaved">--</strong></p>
+</div>
+
+<div class="step">
+<b>Paso 4 — Guardar y aplicar</b>
+<p>Este botón guarda el valor en FFat, fija la posición AZ actual a ese valor
+y después separa automáticamente el rotor unos 2° hacia la derecha.</p>
+<button class="button" onclick="applyAz()">Guardar y aplicar AZ</button>
+<div id="azApply" class="status">Sin aplicar.</div>
+</div>
+</div>
+
+<div class="card">
+<h3>2. Calibración inicial de elevación</h3>
+
+<div class="step">
+<b>Paso 1 — Separar la elevación del final inferior</b>
+<p>Debe estar algunos grados por encima del final inferior.</p>
+</div>
+
+<div class="step">
+<b>Paso 2 — Buscar el final inferior</b>
+<p>El rotor bajará hasta que el final de carrera corte el motor.</p>
+<button class="button" onclick="findEl()">Buscar final inferior</button>
+<div id="elFind" class="status">Esperando.</div>
+</div>
+
+<div class="step">
+<b>Paso 3 — Indicar la elevación física del final</b>
+<p>Si el final inferior corresponde mecánicamente a horizontal, deje
+<b>0,0°</b>. Si posteriormente mide otro valor físico, introdúzcalo aquí.</p>
+<label>Elevación física del final:
+ <input id="elLow" type="number" min="-20" max="2.5" step=".1" value="0.0"> °
+</label>
+<p class="small">Valor guardado actualmente: <strong id="elSaved">--</strong></p>
+</div>
+
+<div class="step">
+<b>Paso 4 — Guardar y aplicar</b>
+<p>Se calculará el offset del JY901 usando su lectura bruta en el final.
+Después el rotor subirá automáticamente hasta la elevación mínima operativa
+de <b>3°</b>.</p>
+<button class="button" onclick="applyEl()">Guardar y aplicar EL</button>
+<div id="elApply" class="status">Sin aplicar.</div>
+</div>
+</div>
+
+<div class="card reference">
+<h3>3. Referenciado posterior</h3>
+<p>Estos botones son para cuando las referencias físicas ya están calibradas y
+guardadas. No es necesario volver a medir con brújula.</p>
+
+<div class="warn">
+Antes de pulsar cualquiera, separe el eje unos grados de su final. El programa
+necesita detectar movimiento antes de aceptar la posterior inmovilidad como
+final de carrera.
+</div>
+
+<div class="step">
+<b>Si AZ está apoyado en el final izquierdo y aparece «AZ sin ref»</b>
+<p>Pulse primero este botón. Girará únicamente hacia la derecha y se detendrá
+automáticamente tras unos 3°, medidos por el IMU. Después pulse
+<b>Referenciar AZ con valor guardado</b>.</p>
+<button class="button" onclick="releaseAz()">Liberar AZ del final izquierdo</button>
+<span id="releaseAzStatus"></span>
+</div>
+
+<p><button class="button" onclick="rerefAz()">Referenciar AZ con valor guardado</button>
+<span id="rAz"></span></p>
+<p><button class="button" onclick="rerefEl()">Referenciar EL con valor guardado</button>
+<span id="rEl"></span></p>
+
+<p>En AZ se buscará el final izquierdo, se recuperará el azimut guardado y se
+retirará 2°. En EL se buscará el final inferior, se recalculará el offset y
+se subirá a 3°.</p>
+</div>
+</main>
+
+<script>
+let lastMotion='IDLE',watchAz=false,watchEl=false,watchReleaseAz=false;
+async function loadRefs(){
+ try{
+  let r=await fetch('/live?cal=1&t='+Date.now(),{cache:'no-store'});
+  if(!r.ok)return;
+  let d=await r.json();
+  if(d.hasAzLeft)$('azLeft').value=Number(d.azLeft).toFixed(1);
+  if(d.hasElLow)$('elLow').value=Number(d.elLow).toFixed(1);
+  $('azSaved').textContent=d.hasAzLeft?'SI':'NO';
+  $('elSaved').textContent=d.hasElLow?'SI':'NO'
+ }catch(e){}
+}
+
+const $=id=>document.getElementById(id);
+async function cmd(u){
+ try{
+  let r=await fetch(u,{cache:'no-store'});
+  if(!r.ok){let m=(await r.text()).trim();throw new Error(m||('HTTP '+r.status))}
+  return true
+ }catch(e){alert('No se pudo iniciar la operación: '+e.message);return false}
+}
+async function findAz(){
+ if(await cmd('/iraorigen?calfindaz=1')){
+  watchAz=true;$('azFind').textContent='Buscando final izquierdo...'
+ }
+}
+async function findEl(){
+ if(await cmd('/iraorigen?calfindel=1')){
+  watchEl=true;$('elFind').textContent='Buscando final inferior...'
+ }
+}
+async function applyAz(){
+ let v=parseFloat($('azLeft').value);
+ if(!Number.isFinite(v)||v<0||v>=360){alert('Introduzca un azimut entre 0 y 359,9°');return}
+ if(!confirm('¿Guardar '+v.toFixed(1)+'° como azimut físico del final izquierdo?'))return;
+ if(await cmd('/iraorigen?calsetaz='+encodeURIComponent(v))){
+  $('azApply').textContent='Referencia AZ guardada. Retirando 2° del final.'
+ }
+}
+async function applyEl(){
+ let v=parseFloat($('elLow').value);
+ if(!Number.isFinite(v)||v<-20||v>2.5){alert('Revise el valor de elevación');return}
+ if(!confirm('¿Guardar '+v.toFixed(1)+'° como elevación física del final inferior?'))return;
+ if(await cmd('/iraorigen?calsetel='+encodeURIComponent(v))){
+  $('elApply').textContent='Calibración EL guardada. Subiendo hasta 3°.'
+ }
+}
+async function rerefAz(){
+ if(!confirm('El rotor buscará el final izquierdo. ¿Continuar?'))return;
+ if(await cmd('/iraorigen?refaz=1'))$('rAz').textContent=' Referenciando...'
+}
+async function releaseAz(){
+ if(!confirm('AZ girará unos 3° hacia la derecha para separarse del final izquierdo. ¿Continuar?'))return;
+ if(await cmd('/iraorigen?releaseaz=1')){
+  watchReleaseAz=true;
+  $('releaseAzStatus').textContent=' Liberando...'
+ }
+}
+async function rerefEl(){
+ if(!confirm('La elevación buscará el final inferior. ¿Continuar?'))return;
+ if(await cmd('/iraorigen?refel=1'))$('rEl').textContent=' Referenciando...'
+}
+async function live(){
+ try{
+  let r=await fetch('/live?t='+Date.now(),{cache:'no-store'});
+  if(!r.ok)return;
+  let d=await r.json();
+  $('az').textContent=Number(d.az).toFixed(1);
+  $('el').textContent=Number(d.el).toFixed(1);
+  $('elraw').textContent=Number(d.elRaw).toFixed(1);
+  $('motion').textContent=d.motion;
+  if(watchReleaseAz&&lastMotion=='LIBERAR_AZ'&&d.motion=='IDLE'){
+   watchReleaseAz=false;
+   $('releaseAzStatus').innerHTML=d.azReleaseDone
+    ?'<span class="ok"> AZ separado. Pulse ahora «Referenciar AZ con valor guardado».</span>'
+    :'<span class="danger"> No se detectó avance. Revise el IMU, relés y motor.</span>'
+  }
+  if(watchAz&&lastMotion=='REF_AZ'&&d.motion=='IDLE'){
+   watchAz=false;
+   $('azFind').innerHTML=d.azCalFound
+    ?'<span class="ok">FIN IZQUIERDO DETECTADO. Mida ahora el azimut con la brújula.</span>'
+    :'La búsqueda terminó sin validar el final.'
+  }
+  if(watchEl&&lastMotion=='REF_EL'&&d.motion=='IDLE'){
+   watchEl=false;
+   $('elFind').innerHTML=d.elCalFound
+    ?'<span class="ok">FIN INFERIOR DETECTADO. Ya puede guardar/aplicar la referencia.</span>'
+    :'La búsqueda terminó sin validar el final.'
+  }
+  lastMotion=d.motion
+ }catch(e){}
+}
+setInterval(live,500);loadRefs();live();
+</script>
+</body>
+</html>

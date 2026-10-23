@@ -10,14 +10,21 @@ bool isWifiConnected() {
   return WiFi.status() == WL_CONNECTED;
 }
 
-String getWifiStatusText() {
+const char* getWifiStatusText() {
+  static char status[56];
   if (WiFi.status() == WL_CONNECTED) {
-    return "STA conectada - IP: " + WiFi.localIP().toString();
+    const IPAddress ip = WiFi.localIP();
+    snprintf(status, sizeof(status), "STA conectada - IP: %u.%u.%u.%u",
+             ip[0], ip[1], ip[2], ip[3]);
+    return status;
   }
 
   wifi_mode_t mode = WiFi.getMode();
   if (mode == WIFI_AP || mode == WIFI_AP_STA) {
-    return "AP activo - IP: " + WiFi.softAPIP().toString();
+    const IPAddress ip = WiFi.softAPIP();
+    snprintf(status, sizeof(status), "AP activo - IP: %u.%u.%u.%u",
+             ip[0], ip[1], ip[2], ip[3]);
+    return status;
   }
 
   return "WiFi no conectada";
@@ -59,6 +66,9 @@ void initWifi() {
 }
 
 void initOta() {
+  // Puerto OTA fijo: evita depender de una propiedad mDNS que algunas
+  // versiones del IDE/core ESP32 no trasladan a la receta de subida.
+  ArduinoOTA.setPort(3232);
   ArduinoOTA.setPassword(OTA_PASSWORD);
   ArduinoOTA
     .onStart([]() {

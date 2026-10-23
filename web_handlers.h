@@ -22,9 +22,12 @@ void handleAddFavoriteCustom();
 void handleConfigPage();
 void handleRestoreFavorites();
 void handleReloadFavorites();
+void handleLoadAmateurCatalog();
+void handleRefreshAmateurCatalog();
+void handleInspectSatellite();
 void handleSearchSat();
 void handleAddFavoriteFromSearch();
 void handleSearchVisibleNow();
 void handleSelectVisibleSat();
 void handleAddVisibleSatToFavorites();
-
+void handleTestNtfy();

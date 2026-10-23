@@ -13,5 +13,7 @@ struct SatData {
 
 constexpr int kWebServerPort = 91;
 constexpr int kTimeZoneHours = 2;
-constexpr int kTableSize = 120;
+// N2YO devuelve objetos grandes por cada segundo. Treinta posiciones caben
+// en el buffer HTTP sin reservar memoria excesiva para el ESP32.
+constexpr int kTableSize = 30;
 constexpr unsigned long kTickMs = 1000;

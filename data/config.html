@@ -1,0 +1,433 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Config rotor</title>
+<style>
+html{font-family:Helvetica,Arial,sans-serif;text-align:center}
+body{margin:8px;background:#fff;color:#222}
+.button{display:inline-block;min-width:64px;background:#3498db;border:0;color:#fff;padding:7px 11px;text-decoration:none;font-size:15px;margin:3px;border-radius:6px;cursor:pointer}
+button.button{font-family:inherit}
+.button.secondary{background:#666}.button.good{background:#238636}.button.warn{background:#a36b00}
+.button:disabled{opacity:.45;cursor:not-allowed}
+.topbar,.cfgbar,.formbar{display:flex;flex-wrap:wrap;justify-content:center;align-items:center;gap:6px;margin:6px 0}
+.panel{background:#f6f6f6;border:1px solid #ddd;border-radius:10px;padding:9px;margin:8px auto;max-width:940px}
+table{margin:auto;border-collapse:collapse;width:100%;max-width:940px;font-size:14px}
+th,td{border:1px solid #ccc;padding:6px 8px}th{background:#e9e9e9}td:last-child{white-space:nowrap}
+input[type=number]{width:100px;padding:5px}input[type=text]{width:210px;max-width:65vw;padding:5px}
+h3,h4{margin:6px 0 8px}.small{font-size:13px;color:#555;line-height:1.35}
+.note{font-size:13px;background:#fff;border-left:4px solid #3498db;padding:7px;text-align:left;margin:7px auto;max-width:860px}
+.badge{display:inline-block;border-radius:12px;padding:4px 9px;font-weight:bold;font-size:13px;margin:3px}
+.bgreen{background:#d9f2df;color:#145c25}.bblue{background:#dceeff;color:#174e78}
+.byellow{background:#fff0bd;color:#715500}.bred{background:#f6d1d1;color:#7d1717}.bgray{background:#e5e5e5;color:#444}
+.inspect{background:#fff;border:1px solid #ccc;border-radius:8px;padding:9px;margin:8px auto;max-width:860px;text-align:left}
+.inspect strong{display:inline-block;min-width:155px}
+.filterbar{display:flex;justify-content:center;align-items:center;gap:6px;flex-wrap:wrap;margin:8px}
+.scroll{max-height:560px;overflow:auto}
+details.group{margin:8px auto;max-width:940px;background:#fff;border:1px solid #ddd;border-radius:8px}
+details.group>summary{cursor:pointer;font-weight:bold;padding:9px;text-align:left}
+details.panel{margin:4px auto;max-width:940px}
+details.panel>summary{cursor:pointer;font-weight:bold;padding:7px}
+.summary{display:flex;justify-content:center;flex-wrap:wrap;gap:4px;margin:8px 0}
+.progress{max-width:720px;margin:7px auto;height:16px;background:#ddd;border-radius:9px;overflow:hidden}
+.progress>div{height:100%;background:#238636;width:0%;transition:width .2s}
+.groupTitle{display:flex;align-items:center;gap:7px}
+.groupHint{font-weight:normal;color:#666;font-size:12px}
+.favmark{display:inline-block;margin-left:6px;padding:2px 6px;border-radius:10px;background:#d9f2df;color:#145c25;font-size:11px;font-weight:bold;white-space:nowrap}
+</style>
+</head>
+<body>
+<div class="topbar">
+ <a class="button" href="/">Volver</a>
+ <a class="button secondary" href="/reset">Reset</a>
+</div>
+
+<div class="panel">
+ <h3>Satélites de radioaficionado</h3>
+ <div class="note">
+  <strong>CelesTrak</strong> proporciona el catálogo orbital Amateur Radio.
+  <strong>SatNOGS</strong> se usa para clasificar cada satélite según sus transmisores:
+  <strong>QSO</strong>, <strong>RX/telemetría</strong>, <strong>inactivo</strong> o <strong>revisar</strong>.
+  La clasificación se guarda en este navegador y no hace falta repetirla cada vez que abras la página.
+ </div>
+
+ <div class="cfgbar">
+  <a class="button good" href="/loadamateur">Cargar catálogo</a>
+  <a class="button secondary" href="/refreshamateur">Actualizar CelesTrak</a>
+ </div>
+ <div class="small">
+  “Cargar catálogo” utiliza la copia FFat. La actualización CelesTrak no debe hacerse repetidamente.
+ </div>
+
+ <div class="small">Catálogo: <span id="amateurStatus">--</span></div>
+
+ <div class="summary">
+  <span class="badge bgreen">QSO: <span id="nQso">0</span></span>
+  <span class="badge bblue">RX: <span id="nRx">0</span></span>
+  <span class="badge byellow">Inactivos: <span id="nInactive">0</span></span>
+  <span class="badge bred">Revisar: <span id="nReview">0</span></span>
+  <span class="badge bgray">Pendientes: <span id="nPending">0</span></span>
+ </div>
+
+ <div class="cfgbar">
+  <button id="scanPending" class="button good" type="button">Clasificar pendientes</button>
+  <button id="scanAll" class="button secondary" type="button">Revisar todos</button>
+  <button id="scanStop" class="button warn" type="button" disabled>Detener</button>
+ </div>
+ <div class="small" id="scanStatus">Sin clasificación en curso.</div>
+ <div class="progress"><div id="scanProgress"></div></div>
+ <div class="small">
+  Se hace una consulta SatNOGS cada vez y se deja una pausa de 4 s entre satélites.
+  Puedes detenerla y continuar después: los ya comprobados quedan guardados.
+ </div>
+
+ <div id="inspectBox"></div>
+
+ <div class="filterbar">
+  Filtrar:
+  <input id="amateurFilter" type="text" placeholder="AO-7, SO-50, NORAD...">
+  <span class="small" id="amateurShown"></span>
+ </div>
+
+ <div id="amateurBox"></div>
+</div>
+
+<div class="panel">
+ <h4>Visibles ahora</h4>
+ <div class="small">Visibilidad: <span id="visStatus"></span></div>
+ <a class="button" href="/searchvisible">Actualizar visibles</a>
+ <a class="button secondary" href="/testntfy">Probar ntfy</a>
+ <div id="visibleBox"></div>
+</div>
+
+<div class="panel">
+ <h4>Favoritos</h4>
+ <div class="small">Guardados en FFat: <span id="favCount"></span></div>
+ <div class="cfgbar">
+  <a class="button secondary" href="/restorefavorites">Restaurar catálogo inicial</a>
+  <a class="button secondary" href="/reloadfavorites">Recargar FFat</a>
+ </div>
+ <div id="favBox"></div>
+</div>
+
+<details class="panel">
+ <summary>Búsqueda general / avanzada</summary>
+ <div class="small">
+  Busca cualquier objeto activo y en órbita en CelesTrak. Que aparezca aquí no significa que sea de radioaficionado.
+ </div>
+ <form action="/searchsat" method="GET" class="formbar">
+  Nombre <input type="text" name="q" required minlength="2">
+  <input type="submit" class="button" value="Buscar">
+ </form>
+ <div id="searchBox"></div>
+ <hr>
+ <div class="small">Alta manual por NORAD</div>
+ <form action="/addfavoritecustom" method="GET" class="formbar">
+  NORAD <input type="number" name="norad" min="1" step="1" required>
+  Nombre <input type="text" name="name">
+  <input type="submit" class="button secondary" value="Añadir manualmente">
+ </form>
+</details>
+
+<div class="small" style="margin:12px">
+ Datos orbitales/catálogo: CelesTrak. Datos de radio: SatNOGS DB (CC BY-SA).
+</div>
+
+<script>
+let C=null,A=null;
+let visTimer=null,visPollCount=0;
+let scanRunning=false,scanStopRequested=false;
+const CACHE_KEY='rotor_amateur_radio_class_v1';
+const SCAN_DELAY_MS=4000;
+const e=s=>encodeURIComponent(s??'');
+const $=id=>document.getElementById(id);
+
+function a(h,t,cls='button'){let x=document.createElement('a');x.className=cls;x.href=h;x.textContent=t;return x}
+function button(t,fn,cls='button'){let x=document.createElement('button');x.type='button';x.className=cls;x.textContent=t;x.onclick=fn;return x}
+function td(t){let x=document.createElement('td');x.textContent=t??'';return x}
+function isFavorite(id){return !!(C&&Array.isArray(C.favorites)&&C.favorites.some(x=>Number(x.id)===Number(id)))}
+function nameTd(x){
+ let c=td(x.name);
+ if(isFavorite(x.id)){let m=document.createElement('span');m.className='favmark';m.textContent='✓ FAVORITO';c.appendChild(m)}
+ return c
+}
+function table(head,rows){
+ let t=document.createElement('table'),tr=document.createElement('tr');
+ head.forEach(x=>{let th=document.createElement('th');th.textContent=x;tr.appendChild(th)});
+ t.appendChild(tr);rows.forEach(r=>t.appendChild(r));return t
+}
+function clearBox(id){let x=$(id);while(x.firstChild)x.removeChild(x.firstChild)}
+const sleep=ms=>new Promise(r=>setTimeout(r,ms));
+
+function loadClassCache(){
+ try{return JSON.parse(localStorage.getItem(CACHE_KEY)||'{}')||{}}
+ catch(e){return {}}
+}
+function saveClassCache(c){
+ try{localStorage.setItem(CACHE_KEY,JSON.stringify(c))}catch(e){}
+}
+function getCached(id){return loadClassCache()[String(id)]||null}
+function putCached(r){
+ if(!r||!r.checked||!r.id)return;
+ let c=loadClassCache();
+ c[String(r.id)]={
+  id:Number(r.id),name:r.name||'',ok:!!r.ok,
+  txTotal:Number(r.txTotal||0),txActive:Number(r.txActive||0),
+  txAmateur:Number(r.txAmateur||0),txActiveAmateur:Number(r.txActiveAmateur||0),
+  txTwoWay:Number(r.txTwoWay||0),modes:r.modes||'',downlinks:r.downlinks||'',
+  uplinks:r.uplinks||'',types:r.types||'',functions:r.functions||'',
+  error:r.error||'',ts:Date.now()
+ };
+ saveClassCache(c)
+}
+
+function radioClass(r){
+ if(!r)return 'pending';
+ if(!r.ok)return 'review';
+ if(Number(r.txActiveAmateur)>0&&Number(r.txTwoWay)>0)return 'qso';
+ if(Number(r.txActiveAmateur)>0)return 'rx';
+ if(Number(r.txAmateur)>0)return 'inactive';
+ return 'review'
+}
+function classLabel(r){
+ let c=radioClass(r);
+ if(c==='qso')return {t:'QSO · BIDIRECCIONAL',css:'bgreen'};
+ if(c==='rx')return {t:'RX / TELEMETRÍA',css:'bblue'};
+ if(c==='inactive')return {t:'INACTIVO',css:'byellow'};
+ if(c==='review')return {t:r&&r.ok?'REVISAR':'ERROR / REVISAR',css:'bred'};
+ return {t:'PENDIENTE',css:'bgray'}
+}
+function inspectLabel(r){
+ if(!r||!r.checked)return {t:'Sin comprobar',c:'bgray'};
+ let x=classLabel(r);return {t:x.t,c:x.css}
+}
+
+function renderInspection(r){
+ clearBox('inspectBox');if(!r||!r.checked)return;
+ let box=document.createElement('div');box.className='inspect';
+ let title=document.createElement('h4');title.textContent=(r.name||('SAT '+r.id))+' · NORAD '+r.id;box.appendChild(title);
+ let lab=inspectLabel(r),b=document.createElement('span');b.className='badge '+lab.c;b.textContent=lab.t;box.appendChild(b);
+
+ if(!r.ok){
+  let p=document.createElement('div');p.textContent=r.error||'No se pudo consultar SatNOGS';box.appendChild(p);
+  $('inspectBox').appendChild(box);return
+ }
+
+ let lines=[
+  ['Transmisores registrados',r.txTotal],['Transmisores activos',r.txActive],
+  ['Amateur registrados',r.txAmateur],['Amateur activos',r.txActiveAmateur],
+  ['Bidireccional / QSO posible',r.txTwoWay>0?'Sí ('+r.txTwoWay+')':'No detectado'],
+  ['Tipos',r.types||'-'],['Modos activos',r.modes||'-'],['Downlink',r.downlinks||'-'],
+  ['Uplink',r.uplinks||'-'],['Funciones',r.functions||'-']
+ ];
+ lines.forEach(v=>{let d=document.createElement('div'),s=document.createElement('strong');s.textContent=v[0]+': ';d.appendChild(s);d.append(document.createTextNode(v[1]));box.appendChild(d)});
+ let actions=document.createElement('div');actions.style.textAlign='center';actions.style.marginTop='8px';
+ if(Number(r.txActiveAmateur)>0)actions.append(a('/addfavoritefromsearch?norad='+r.id+'&name='+e(r.name),'Añadir a favoritos','button good'));
+ else actions.append(a('/addfavoritefromsearch?norad='+r.id+'&name='+e(r.name),'Añadir de todos modos','button secondary'));
+ box.appendChild(actions);$('inspectBox').appendChild(box)
+}
+
+async function fetchAmateur(){
+ let r=await fetch('/live?amateur=1&t='+Date.now(),{cache:'no-store'});
+ if(!r.ok)throw new Error('HTTP '+r.status);
+ A=await r.json();
+ $('amateurStatus').textContent=A.status||'--';
+ if(A.inspection&&A.inspection.checked){
+  putCached(A.inspection);
+  renderInspection(A.inspection)
+ }
+ renderAmateur()
+}
+
+async function inspectOne(id,name,fromScan=false){
+ if(scanRunning&&!fromScan)return;
+ if(!fromScan){
+  $('scanStatus').textContent='Comprobando '+name+'...';
+ }
+ try{
+  let u='/inspectsat?norad='+id+'&name='+e(name)+'&t='+Date.now();
+  // El firmware actual responde con 303 hacia /config; fetch lo sigue.
+  await fetch(u,{cache:'no-store'});
+  await fetchAmateur();
+
+  let r=A&&A.inspection;
+  if(!r||Number(r.id)!==Number(id)){
+   throw new Error('respuesta no corresponde al NORAD')
+  }
+  if(!fromScan){
+   $('scanStatus').textContent='Comprobado: '+name+' · '+classLabel(r).t
+  }
+  return r
+ }catch(err){
+  if(!fromScan)$('scanStatus').textContent='Error comprobando '+name+': '+err.message;
+  return null
+ }
+}
+
+function makeRows(items){
+ return items.map(x=>{
+  let r=document.createElement('tr');
+  r.append(td(x.id));r.append(nameTd(x));
+  let cached=getCached(x.id),lab=classLabel(cached);
+  let cs=document.createElement('td'),bb=document.createElement('span');
+  bb.className='badge '+lab.css;bb.textContent=lab.t;cs.appendChild(bb);r.appendChild(cs);
+  let c=document.createElement('td');
+  c.append(button('Comprobar',()=>inspectOne(x.id,x.name)));
+  if(!isFavorite(x.id)&&cached&&cached.ok&&Number(cached.txActiveAmateur)>0)
+   c.append(a('/addfavoritefromsearch?norad='+x.id+'&name='+e(x.name),'Añadir','button good'));
+  r.appendChild(c);return r
+ })
+}
+
+function addGroup(box,title,hint,items,open){
+ if(!items.length)return;
+ let d=document.createElement('details');d.className='group';d.open=open;
+ let s=document.createElement('summary');
+ let wrap=document.createElement('span');wrap.className='groupTitle';
+ let name=document.createElement('span');name.textContent=title+' ('+items.length+')';
+ let h=document.createElement('span');h.className='groupHint';h.textContent=hint||'';
+ wrap.append(name);wrap.append(h);s.append(wrap);d.append(s);
+ d.append(table(['NORAD','Nombre','Estado','Acción'],makeRows(items)));
+ box.append(d)
+}
+
+function renderAmateur(){
+ clearBox('amateurBox');
+ if(!A||!A.loaded||!A.items.length){
+  $('amateurBox').textContent='Pulsa “Cargar catálogo”.';
+  $('amateurShown').textContent='';return
+ }
+
+ let q=($('amateurFilter').value||'').trim().toLowerCase();
+ let items=A.items.slice();
+ if(q)items=items.filter(x=>x.name.toLowerCase().includes(q)||String(x.id).includes(q));
+
+ let groups={qso:[],rx:[],inactive:[],review:[],pending:[]};
+ items.forEach(x=>groups[radioClass(getCached(x.id))].push(x));
+ Object.values(groups).forEach(g=>g.sort((a,b)=>a.name.localeCompare(b.name,'es')));
+
+ $('nQso').textContent=groups.qso.length;
+ $('nRx').textContent=groups.rx.length;
+ $('nInactive').textContent=groups.inactive.length;
+ $('nReview').textContent=groups.review.length;
+ $('nPending').textContent=groups.pending.length;
+ $('amateurShown').textContent=items.length+' mostrados';
+
+ let box=$('amateurBox');
+ addGroup(box,'QSO','amateur activo con uplink/transceptor/transpondedor',groups.qso,true);
+ addGroup(box,'RX / telemetría','amateur activo, sin canal bidireccional detectado',groups.rx,true);
+ addGroup(box,'Inactivos','hay radio amateur registrada pero no activa',groups.inactive,false);
+ addGroup(box,'Revisar','sin datos amateur confirmados o error SatNOGS',groups.review,false);
+ addGroup(box,'Pendientes','todavía no comprobados',groups.pending,groups.qso.length+groups.rx.length===0)
+}
+
+async function runScan(all){
+ if(scanRunning||!A||!A.items||!A.items.length)return;
+ scanRunning=true;scanStopRequested=false;
+ $('scanPending').disabled=true;$('scanAll').disabled=true;$('scanStop').disabled=false;
+
+ let list=A.items.filter(x=>all||!getCached(x.id));
+ let total=list.length,done=0;
+ if(!total){
+  $('scanStatus').textContent='No quedan satélites pendientes.';
+  scanRunning=false;$('scanPending').disabled=false;$('scanAll').disabled=false;$('scanStop').disabled=true;
+  return
+ }
+
+ for(let x of list){
+  if(scanStopRequested)break;
+  $('scanStatus').textContent='Clasificando '+(done+1)+'/'+total+': '+x.name+'...';
+  $('scanProgress').style.width=((done/total)*100).toFixed(1)+'%';
+
+  let r=await inspectOne(x.id,x.name,true);
+  done++;
+  $('scanProgress').style.width=((done/total)*100).toFixed(1)+'%';
+  renderAmateur();
+
+  if(scanStopRequested)break;
+  // Si SatNOGS falla, dar algo más de aire.
+  await sleep(r&&r.ok?SCAN_DELAY_MS:8000)
+ }
+
+ scanRunning=false;
+ $('scanPending').disabled=false;$('scanAll').disabled=false;$('scanStop').disabled=true;
+ $('scanStatus').textContent=scanStopRequested
+   ? 'Clasificación detenida. Progreso guardado: '+done+'/'+total+'.'
+   : 'Clasificación terminada: '+done+'/'+total+'.';
+}
+
+function renderConfig(C){
+ $('favCount').textContent=C.favCount;$('visStatus').textContent=C.visStatus;
+ clearBox('visibleBox');
+ if(C.visible.length){
+  let rows=C.visible.map(x=>{let r=document.createElement('tr');r.append(td(x.id));r.append(nameTd(x));let c=document.createElement('td');c.append(a('/selectvisible?norad='+x.id+'&name='+e(x.name),'Seleccionar'));if(!isFavorite(x.id))c.append(a('/addvisiblefavorite?norad='+x.id+'&name='+e(x.name),'Añadir'));r.append(c);return r});
+  $('visibleBox').append(table(['NORAD','Nombre','Acción'],rows))
+ }else $('visibleBox').textContent='Sin resultados';
+
+ clearBox('favBox');
+ let rows=C.favorites.map(x=>{
+  let r=document.createElement('tr');r.append(td(x.id));r.append(td(x.name));
+  r.append(td(x.state==2?'VISIBLE':x.state==1?'NO':'COMPROBANDO'));
+  let p='-';
+  if(x.passTs){let d=new Date(x.passTs*1000);p=d.toISOString().slice(8,10)+'/'+d.toISOString().slice(5,7)+'/'+d.toISOString().slice(0,4)+' '+d.toISOString().slice(11,16)+' UTC ('+Number(x.passEl).toFixed(1)+'°)'}
+  r.append(td(p));let c=document.createElement('td');c.append(a('/removefavorite?norad='+x.id,'Quitar','button secondary'));r.append(c);return r
+ });
+ $('favBox').append(table(['NORAD','Nombre','Ahora','Próximo pase','Acción'],rows));
+
+ clearBox('searchBox');
+ if(C.search.length){
+  let sr=C.search.map(x=>{let r=document.createElement('tr');r.append(td(x.id));r.append(nameTd(x));let c=document.createElement('td');c.append(button('Comprobar radio',()=>inspectOne(x.id,x.name)));r.append(c);return r});
+  $('searchBox').append(table(['NORAD','Nombre','Acción'],sr))
+ }
+}
+
+function needsVisibilityRefresh(){
+ if(scanRunning||!C)return false;
+ let s=(C.visStatus||'').toLowerCase();
+ if(s.includes('actualizando')||s.includes('sin datos'))return true;
+ return Array.isArray(C.favorites)&&C.favorites.some(x=>Number(x.state)===0)
+}
+function scheduleVisibilityRefresh(){
+ if(visTimer){clearTimeout(visTimer);visTimer=null}
+ if(!needsVisibilityRefresh()){visPollCount=0;return}
+ let delay=visPollCount<12?1500:5000;
+ visTimer=setTimeout(refreshVisibilityState,delay)
+}
+async function refreshVisibilityState(){
+ visTimer=null;
+ if(scanRunning){scheduleVisibilityRefresh();return}
+ try{
+  let r=await fetch('/live?config=1&t='+Date.now(),{cache:'no-store'});
+  if(!r.ok)throw new Error('HTTP '+r.status);
+  C=await r.json();renderConfig(C);visPollCount++
+ }catch(e){visPollCount++}
+ finally{scheduleVisibilityRefresh()}
+}
+
+async function loadAll(){
+ try{
+  let [rc,ra]=await Promise.all([
+   fetch('/live?config=1&t='+Date.now(),{cache:'no-store'}),
+   fetch('/live?amateur=1&t='+Date.now(),{cache:'no-store'})
+  ]);
+  if(!rc.ok||!ra.ok)throw new Error('HTTP');
+  C=await rc.json();A=await ra.json();
+  renderConfig(C);$('amateurStatus').textContent=A.status||'--';
+  if(A.inspection&&A.inspection.checked){putCached(A.inspection);renderInspection(A.inspection)}
+  renderAmateur();scheduleVisibilityRefresh()
+ }catch(err){
+  $('visStatus').textContent='Error cargando datos';
+  $('amateurStatus').textContent='Error cargando datos'
+ }
+}
+
+$('amateurFilter').addEventListener('input',renderAmateur);
+$('scanPending').onclick=()=>runScan(false);
+$('scanAll').onclick=()=>runScan(true);
+$('scanStop').onclick=()=>{scanStopRequested=true;$('scanStatus').textContent='Deteniendo después de la consulta actual...'};
+document.addEventListener('visibilitychange',()=>{if(!document.hidden&&!scanRunning)refreshVisibilityState()});
+loadAll();
+</script>
+</body>
+</html>

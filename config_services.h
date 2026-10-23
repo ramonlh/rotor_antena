@@ -2,13 +2,22 @@
 
 #pragma once
 
-static const char* OTA_PASSWORD = "TU_CLAVE_OTA";
+// Interruptor de compilacion del servidor FTP:
+//   0 = desactivado (recomendado para uso normal; ahorra flash y RAM)
+//   1 = activado (usar solo durante sesiones de mantenimiento)
+// Cambiar este valor y volver a compilar/cargar el firmware.
+#define ROTOR_ENABLE_FTP 0
+
+// Notificaciones ntfy. Se pueden sobrescribir en config_secrets.h.
+// NTFY_TOPIC vacío deja el servicio desactivado y conserva compatibilidad
+// con instalaciones que todavía no tienen estas opciones.
+#ifndef NTFY_SERVER
+#define NTFY_SERVER "https://ntfy.sh"
+#endif
+#ifndef NTFY_TOPIC
+#define NTFY_TOPIC ""
+#endif
 
 static const char* SERVER_POS_BASE = "https://api.n2yo.com/rest/v1/satellite/positions/";
-static const char* SERVER_POS_MYDATA = "/TU_LAT/TU_LON/TU_ALT_M/";
-static const char* SERVER_POS_KEY = "/&apiKey=TU_API_KEY_N2YO";
-
-static const char* N2YO_API_KEY = "TU_API_KEY_N2YO";
-static constexpr double MY_LAT = 40.4168;
-static constexpr double MY_LON = -3.7038;
-static constexpr int MY_ALT_M = 650;
+// La ubicación de la estación (MY_LAT, MY_LON, MY_ALT_M) se define en
+// config_secrets.h y la usan todas las consultas a N2YO.

@@ -1,13 +1,25 @@
 #include <Arduino.h>
 #include <WiFi.h>
 #include <HTTPClient.h>
-#include "Arduino_JSON.h"
 #include "sat_visibility.h"
 #include "sat_favorites.h"
 #include "config.h"
 
 static SatVisibilityInfo gVis[32];
 static int gVisCount = 0;
+
+static bool visibilityNumber(
+    const char* start,
+    const char* limit,
+    const char* key,
+    double& value) {
+  const char* field = strstr(start, key);
+  if (field == nullptr || field >= limit) return false;
+  const char* colon = strchr(field, ':');
+  char* end = nullptr;
+  value = colon != nullptr ? strtod(colon + 1, &end) : 0.0;
+  return colon != nullptr && end != colon + 1 && end <= limit;
+}
 
 static void clearEntry(int i) {
   gVis[i].noradId = 0;
@@ -84,15 +96,21 @@ bool refreshVisibleNow() {
   String payload = http.getString();
   http.end();
 
-  JSONVar root = JSON.parse(payload);
-  if (JSON.typeof(root) != "object") return false;
-  if (JSON.typeof(root["above"]) != "array") return false;
+  const char* json = payload.c_str();
+  const char* above = strstr(json, "\"above\"");
+  const char* cursor = above != nullptr ? strchr(above, '[') : nullptr;
+  const char* arrayEnd = cursor != nullptr ? strchr(cursor, ']') : nullptr;
+  if (cursor == nullptr || arrayEnd == nullptr) return false;
 
-  JSONVar arr = root["above"];
-  int n = arr.length();
-
-  for (int i = 0; i < n; ++i) {
-    long norad = long(arr[i]["satid"]);
+  while (cursor < arrayEnd) {
+    const char* object = strchr(cursor, '{');
+    if (object == nullptr || object >= arrayEnd) break;
+    const char* objectEnd = strchr(object, '}');
+    if (objectEnd == nullptr || objectEnd > arrayEnd) break;
+    cursor = objectEnd + 1;
+    double id = 0.0;
+    if (!visibilityNumber(object, objectEnd, "\"satid\"", id)) continue;
+    long norad = long(id);
     int idx = ensureEntry(norad);
     if (idx >= 0) gVis[idx].visibleNow = true;
   }
@@ -136,16 +154,19 @@ bool refreshFutureVisibility(uint8_t daysAhead, uint8_t minElevation) {
     String payload = http.getString();
     http.end();
 
-    JSONVar root = JSON.parse(payload);
-    if (JSON.typeof(root) != "object") continue;
-    if (JSON.typeof(root["passes"]) != "array") continue;
-
-    JSONVar passes = root["passes"];
-    if (passes.length() <= 0) continue;
+    const char* json = payload.c_str();
+    const char* passes = strstr(json, "\"passes\"");
+    const char* object = passes != nullptr ? strchr(passes, '{') : nullptr;
+    const char* objectEnd = object != nullptr ? strchr(object, '}') : nullptr;
+    double startUtc = 0.0;
+    double maxEl = 0.0;
+    if (object == nullptr || objectEnd == nullptr ||
+        !visibilityNumber(object, objectEnd, "\"startUTC\"", startUtc) ||
+        !visibilityNumber(object, objectEnd, "\"maxEl\"", maxEl)) continue;
 
     gVis[idx].hasFuturePass = true;
-    gVis[idx].nextPassStartUTC = uint32_t(passes[0]["startUTC"]);
-    gVis[idx].nextPassMaxEl = double(passes[0]["maxEl"]);
+    gVis[idx].nextPassStartUTC = uint32_t(startUtc);
+    gVis[idx].nextPassMaxEl = float(maxEl);
     anyOk = true;
   }
 

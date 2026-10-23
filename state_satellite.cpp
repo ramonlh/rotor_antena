@@ -14,5 +14,5 @@ float tabelevat[kTableSize] = {0.0f};
 int lastresponse = 0;
 uint32_t unixtime = 0;
 long satid = 25544;
-String satname = "";
+String satname = "ISS";
 String sattle = "";

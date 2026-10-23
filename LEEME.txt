@@ -1,0 +1,47 @@
+INTERFAZ WEB EMBEBIDA EN FLASH
+
+- index.html, config.html y calibracion.html se sirven comprimidos desde
+  PROGMEM; FFat queda reservado para datos persistentes y caches.
+- Después de modificar cualquier pagina de data/, ejecutar:
+    bash generate_web_assets.sh
+- A continuación basta compilar y cargar el firmware una sola vez.
+- No es necesario activar FTP ni cargar las paginas por separado.
+- web_assets_data.h es generado: no editarlo manualmente.
+
+N2YO /ABOVE - POLITICA 10 MIN V1
+
+Objetivo:
+evitar volver a agotar el límite N2YO de /above.
+
+Política:
+- /above automático: máximo 1 vez por minuto para no perder pases cortos.
+- Avisos ntfy: define NTFY_SERVER y un NTFY_TOPIC largo en
+  config_secrets.h, suscríbete a ese tema desde la app y usa "Probar ntfy"
+  en /config. Se avisa una sola vez cuando un favorito pasa a visible; si
+  aparecen varios a la vez se agrupan en una notificación.
+  Equivale a unas 6 peticiones/hora.
+- El límite N2YO documentado para /above es 100/hora.
+- Botón "Actualizar visibles": puede forzar una consulta, pero nunca si
+  hubo otro intento hace menos de 60 segundos.
+- Si N2YO responde que la cuota está agotada:
+  backoff de 65 minutos.
+- Fallos HTTP/JSON genéricos:
+  backoff de 60 segundos.
+- /positions tiene prioridad: /above no arranca hasta que exista una
+  predicción válida del satélite seleccionado.
+- /positions y /above nunca se ejecutan simultáneamente.
+- Una caché de visibles válida se conserva si falla N2YO.
+- El task de mantenimiento pasa de despertarse cada 5 s a cada 30 s.
+
+SUSTITUIR SOLAMENTE:
+  sat_visible_now.cpp
+
+No cambia:
+- FFat
+- index.html
+- config.html
+- sat_fetch.cpp
+- sat_tracking.cpp
+
+IMPORTANTE:
+mantener instalados sat_fetch.cpp/sat_fetch.h de n2yo_robusto_v1.

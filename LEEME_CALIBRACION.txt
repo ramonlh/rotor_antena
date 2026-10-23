@@ -1,0 +1,65 @@
+CALIBRACION GUIADA V1
+
+OBJETIVO
+Separar completamente el proceso de calibración de la pantalla normal.
+
+NUEVA PÁGINA
+/config?cal=1
+
+La página principal sólo muestra un botón "Calibración".
+La calibración se divide en:
+1) calibración inicial AZ;
+2) calibración inicial EL;
+3) referenciado posterior usando valores guardados.
+
+PRIMERA CALIBRACION AZ
+- separar el rotor del final izquierdo;
+- Buscar final izquierdo;
+- cuando quede detenido y la página confirme FIN DETECTADO,
+  medir el azimut verdadero/geográfico con brújula externa;
+- introducir ese valor;
+- Guardar y aplicar AZ;
+- el rotor se retira 2 grados a la derecha.
+
+PRIMERA CALIBRACION EL
+- separar del final inferior;
+- Buscar final inferior;
+- cuando se detecte, introducir la elevación física del final (normalmente 0.0);
+- Guardar y aplicar EL;
+- se calcula el offset del JY901 y sube a 3 grados.
+
+REFERENCIADO POSTERIOR
+No requiere brújula ni volver a introducir valores:
+- si AZ está apoyado en el final izquierdo y no tiene referencia, usar primero
+  "Liberar AZ del final izquierdo"; se moverá 3 grados a la derecha con límite
+  por IMU y por tiempo;
+- Referenciar AZ con valor guardado.
+- Referenciar EL con valor guardado.
+
+LIMITES DE AZIMUT DEL MONTAJE ACTUAL
+- final izquierdo: 200 grados;
+- final derecho: 160 grados, llegando a él desde 0 grados;
+- recorrido útil: 320 grados (200 -> 360/0 -> 160);
+- el sector entre 160 y 200 grados no se puede orientar y el firmware rechaza
+  cualquier destino situado dentro de él.
+
+ARCHIVOS DE PROGRAMA A SUSTITUIR
+imu_sensor.cpp
+imu_sensor.h
+rotor_positioning.cpp
+rotor_positioning.h
+web_handlers.cpp
+web_pages.cpp
+
+ARCHIVOS FFat
+index.html
+calibracion.html
+
+config.html no cambia.
+
+IMPORTANTE
+Copiar primero los HTML por FTP a la raíz de FFat:
+ /index.html
+ /calibracion.html
+
+No formatear FFat: contiene favoritos y referencias persistentes.
